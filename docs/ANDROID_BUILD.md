@@ -185,6 +185,27 @@ cd frontend/android
 
 ## ❓ 常见问题
 
+### Q0：我在仓库主页的 Releases 区域看不到任何东西？
+**A**：仓库主页右侧的 **Releases** 区块**只会显示带 Git Tag 的 Release**。当前 workflow 的行为：
+
+| 触发条件 | 是否创建 Release | 用户可见性 |
+|---|---|---|
+| `git push origin main` | ✅ 创建 `nightly-YYYYMMDD-HHMM-{sha}` Prerelease | 仓库主页 Releases 区域可见，标"Pre-release" |
+| `git push origin v1.0.0` | ✅ 创建 `v1.0.0` Stable Release | 仓库主页 Releases 区域可见，标"Latest" |
+| `git push origin develop` | ❌ 不创建 | 需手动在 Actions 页面下载 Artifact |
+| Pull Request | ❌ 不创建 | 需手动在 Actions 页面下载 Artifact |
+
+**最快看到效果**：直接 `git push origin main`，CI 会自动创建一个 Nightly Prerelease，3-5 分钟后仓库主页就能看到。
+
+**想要正式版本**：
+```bash
+# Windows
+.\release.ps1 v1.0.0
+
+# Linux / macOS
+./release.sh v1.0.0
+```
+
 ### Q1：CI 提示 "Keystore was tampered with, or password was incorrect"
 **A**：检查 `KEYSTORE_PASSWORD` / `KEY_PASSWORD` Secret 是否与生成 keystore 时一致。
 
@@ -202,3 +223,29 @@ cd frontend/android
 
 ### Q6：能在 iOS 上也打包吗？
 **A**：可以加 Capacitor iOS 平台，但 iOS 构建**必须在 macOS** 上执行（Apple 限制）。需要新增 `macos-latest` runner 的 workflow。
+
+### Q7：Nightly Release 太多了怎么办？
+**A**：可以加一个清理 workflow，定期删除超过 N 天的 `nightly-*` tag。示例：
+```yaml
+# .github/workflows/cleanup-nightly.yml
+name: Cleanup Nightly Releases
+on:
+  schedule: [{ cron: '0 3 * * 0' }]   # 每周日凌晨 3 点
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh release list --limit 100 --json tagName,isPrerelease \
+            | jq -r '.[] | select(.isPrerelease) | .tagName' \
+            | head -n -10 \
+            | xargs -I {} gh release delete {} --yes --cleanup-tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+只保留最近 10 个 Nightly。
+
+### Q8：想让别人扫码就下载
+**A**：把 GitHub Releases 的 APK 下载链接生成二维码，放到官网或 README：
+- 推荐工具：[QR Code Generator](https://www.qrcode-monkey.com/)
+- 链接模板：`https://github.com/<OWNER>/<REPO>/releases/latest/download/learnspark-x.x.x.apk`
