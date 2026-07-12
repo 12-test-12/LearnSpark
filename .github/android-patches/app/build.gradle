@@ -1,0 +1,79 @@
+apply plugin: 'com.android.application'
+
+// ============================================================
+//  LearnSpark · app/build.gradle 模板
+//  修复 "packageinfo is null" 错误的结构化方案
+//
+//  关键点：
+//  1. namespace 与 applicationId 都显式声明为 com.learnspark.app
+//     - 避免 AGP 8.x 默认不写 package 属性
+//     - 避免 namespace 和 applicationId 不一致
+//  2. minifyEnabled 保持 false（Capacitor 默认）
+//     - 强制开启 R8 是 "packageinfo is null" 的高风险根因
+//     - proguard-rules.pro 已就位，将来需要时手动开启即可
+//  3. signingConfigs 使用 KEYSTORE_xxx 占位符
+//     - 通过 ./gradlew -PKEYSTORE_FILE=... 注入
+//     - 不在 gradle 文件里硬编码密码
+//  4. buildTypes.release 显式引用 proguard-rules.pro
+//     - 即使 minifyEnabled=false，引用关系保持稳定
+// ============================================================
+
+android {
+    namespace "com.learnspark.app"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.learnspark.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+    }
+
+    // ===== 签名配置（从 -P 注入）=====
+    signingConfigs {
+        release {
+            storeFile file(KEYSTORE_FILE)
+            storePassword KEYSTORE_PASSWORD
+            keyAlias KEY_ALIAS
+            keyPassword KEY_PASSWORD
+        }
+    }
+
+    // ===== Build Types =====
+    buildTypes {
+        release {
+            // 关键：保持 false，避免 R8 删除 Capacitor 反射类
+            // 一旦确定 proguard 规则足够，再手动改为 true
+            minifyEnabled false
+            // 引用 proguard 规则文件（即使 minify=false 也无害，作为兜底）
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    // ===== 资源打包兼容（避免 split/aapt2 报错）=====
+    aaptOptions {
+        ignoreAssetsPattern '!.svn:!.git:!.DS_Store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+repositories {
+    flatDir {
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$androidxCoreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxExtJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.settings.gradle'
