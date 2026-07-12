@@ -123,13 +123,9 @@ jobs:
           set -e
           GRADLE=app/build.gradle
 
-          # 1) 把 buildTypes.release 的 signingConfig 从 debug 改为 release
-          sed -i 's|signingConfig\s\+signingConfigs\.debug|signingConfig signingConfigs.release|g' "$GRADLE"
-
-          # 2) 在文件顶部插入签名配置块（用 __SIGN_BLOCK_HEREDOC__ 作为唯一哨兵避免冲突）
-          cat > /tmp/__SIGN_BLOCK_HEREDOC__.gradle <<'SIGNBLOCK'
-          // === CI 注入：签名配置 ===
-          android {
+          # ---------- 1) 准备签名块（4 空格缩进，作为 android { 的子块）----------
+          # AGP 8.x 要求 signingConfigs 必须是 android {} 块的子节点
+          cat > /tmp/__sign_block__.gradle <<'SIGNBLOCK'
               signingConfigs {
                   release {
                       if (project.hasProperty("KEYSTORE_FILE")) {
@@ -140,21 +136,37 @@ jobs:
                       }
                   }
               }
-          }
           SIGNBLOCK
 
-          # 3) 拼接到原文件头部（去重：如果已经注入过就不重复加）
-          if ! grep -q "CI 注入：签名配置" "$GRADLE"; then
-            cat /tmp/__SIGN_BLOCK_HEREDOC__.gradle "$GRADLE" > /tmp/__MERGED__.gradle
-            mv /tmp/__MERGED__.gradle "$GRADLE"
-            echo "✓ 签名配置已注入到 build.gradle 头部"
-          else
+          # ---------- 2) 定位到原 android { 块（确保在 plugins 块之后）----------
+          ANDROID_LINE=$(grep -nE '^[[:space:]]*android[[:space:]]*\{[[:space:]]*$' "$GRADLE" | head -n1 | cut -d: -f1)
+
+          if [ -z "$ANDROID_LINE" ]; then
+            echo "❌ 未找到 android { 块，请检查 $GRADLE 结构"
+            exit 1
+          fi
+          echo "▶ 找到 android { 块在第 $ANDROID_LINE 行"
+
+          # ---------- 3) 在 android { 行的下一行插入签名子块（去重）----------
+          if grep -q "storePassword KEYSTORE_PASSWORD" "$GRADLE"; then
             echo "✓ 签名配置已存在，跳过注入"
+          else
+            head -n "$ANDROID_LINE" "$GRADLE" > /tmp/__part1__.gradle
+            tail -n +$((ANDROID_LINE + 1)) "$GRADLE" > /tmp/__part2__.gradle
+            cat /tmp/__part1__.gradle /tmp/__sign_block__.gradle /tmp/__part2__.gradle > "$GRADLE"
+            echo "✓ signingConfigs { release { ... } } 已作为 android { 的第一个子块插入"
           fi
 
-          # 4) 校验
-          echo "===== build.gradle 头部预览（前 20 行）====="
-          head -20 "$GRADLE"
+          # ---------- 4) 把 release 的 signingConfig 从 debug 改为 release ----------
+          sed -i 's|signingConfig[[:space:]]\+signingConfigs\.debug|signingConfig signingConfigs.release|g' "$GRADLE"
+          echo "✓ 已将 buildTypes.release 的 signingConfig 指向 release"
+
+          # ---------- 5) 校验 ----------
+          echo "===== build.gradle 头部预览（前 30 行）====="
+          head -30 "$GRADLE"
+          echo ""
+          echo "===== signingConfigs / signingConfig 引用 ====="
+          grep -nE "signingConfig" "$GRADLE" || echo "(未找到)"
 
       # ---------- Gradle 构建 ----------
       - name: 启用 Gradle 缓存
