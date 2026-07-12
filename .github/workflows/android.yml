@@ -210,6 +210,13 @@ jobs:
           else
             echo "  ✓ 未使用已弃用的 aaptOptions（AGP 8.x 兼容）"
           fi
+          if grep -qE '\$androidx[A-Z][a-zA-Z]+Version' "$APP_DIR/build.gradle"; then
+            echo "  ✗ 使用了未定义的 \${androidxXxxVersion} 变量，会导致 Groovy 解析失败！"
+            echo "    应该是用字面量版本号（如 'androidx.appcompat:appcompat:1.6.1'）"
+            exit 1
+          else
+            echo "  ✓ AndroidX 版本用字面量，不依赖外部 ext 变量"
+          fi
 
       # ---------- Gradle 构建 ----------
       - name: 启用 Gradle 缓存

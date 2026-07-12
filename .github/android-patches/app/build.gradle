@@ -1,5 +1,3 @@
-apply plugin: 'com.android.application'
-
 // ============================================================
 //  LearnSpark · app/build.gradle 模板
 //  修复 "packageinfo is null" 错误的结构化方案
@@ -8,19 +6,24 @@ apply plugin: 'com.android.application'
 //  1. namespace 与 applicationId 都显式声明为 com.learnspark.app
 //  2. minifyEnabled 保持 false（Capacitor 默认），避免 R8 误删反射类
 //  3. signingConfigs 用 findProperty 保护，-P 参数未注入时也不崩溃
-//  4. buildTypes.release 显式引用 proguard-rules.pro
+//  4. AndroidX 版本用字面量，不依赖根 build.gradle 的 ext 注入
+//  5. 用 plugins DSL 而非老式 apply plugin（AGP 8.x 推荐）
 //
 //  严格遵循 Capacitor 6.1.2 官方模板结构
 // ============================================================
 
+plugins {
+    id 'com.android.application'
+}
+
 android {
     namespace "com.learnspark.app"
-    compileSdk rootProject.ext.compileSdkVersion
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.learnspark.app"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdkVersion 22
+        targetSdkVersion 34
         versionCode 1
         versionName "1.0"
     }
@@ -52,13 +55,14 @@ repositories {
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
-    implementation "androidx.core:core-splashscreen:$androidxCoreSplashScreenVersion"
+    // AndroidX 版本用字面量（不依赖根 build.gradle 的 ext 注入）
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
     implementation project(':capacitor-android')
-    testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "androidx.test.ext:junit:$androidxExtJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
     implementation project(':capacitor-cordova-android-plugins')
 }
 
