@@ -157,10 +157,27 @@ jobs:
           cp "$PATCH_DIR/app/build.gradle" "$APP_DIR/build.gradle"
           echo "  ✓ app/build.gradle 已用模板覆盖"
 
+          # ===== 关键：去除 CRLF 行尾 =====
+          # Windows 上创建的文件可能带 \r，Linux 上 Gradle Groovy 解析器
+          # 遇到 \r 会导致 plugin 应用失败 → implementation 配置不存在 →
+          # dependencies 块报 "invokeMethod" 错误
+          sed -i 's/\r$//' "$APP_DIR/build.gradle"
+          sed -i 's/\r$//' "$APP_DIR/proguard-rules.pro"
+          sed -i 's/\r$//' "$APP_DIR/src/main/AndroidManifest.xml"
+          echo "  ✓ 已去除所有模板文件的 CRLF 行尾"
+
           # 打印模板前 30 行（调试用：确认 cp 真的生效）
           echo "  ----- app/build.gradle 前 30 行 -----"
           head -30 "$APP_DIR/build.gradle" | sed 's/^/    /'
           echo "  ------------------------------------"
+
+          # 校验是否存在 CRLF（如果有，说明 sed 没生效）
+          if grep -lq $'\r' "$APP_DIR/build.gradle" 2>/dev/null; then
+            echo "  ✗ build.gradle 仍含 CRLF 行尾！"
+            exit 1
+          else
+            echo "  ✓ build.gradle 已确认为 LF 行尾"
+          fi
 
           # 校验关键字段
           grep -q 'namespace "com.learnspark.app"' "$APP_DIR/build.gradle" && \
@@ -204,7 +221,27 @@ jobs:
       - name: 构建 Release APK
         working-directory: frontend/android
         run: |
-          ./gradlew assembleRelease --no-daemon --stacktrace \
+          # 先打印环境信息，方便诊断
+          echo "===== Gradle 环境信息 ====="
+          ./gradlew --version
+          echo ""
+          echo "===== app/build.gradle 完整内容 ====="
+          cat app/build.gradle
+          echo ""
+          echo "===== 根 settings.gradle ====="
+          cat settings.gradle 2>/dev/null || echo "(不存在)"
+          echo ""
+          echo "===== 根 build.gradle ====="
+          cat build.gradle 2>/dev/null || echo "(不存在)"
+          echo ""
+          echo "===== variables.gradle ====="
+          cat variables.gradle 2>/dev/null || echo "(不存在)"
+          echo ""
+          echo "===== capacitor.settings.gradle ====="
+          cat app/capacitor.settings.gradle 2>/dev/null || echo "(不存在)"
+          echo ""
+          echo "===== 开始构建 ====="
+          ./gradlew assembleRelease --no-daemon --full-stacktrace \
             -PKEYSTORE_FILE=learnspark.keystore \
             -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD || 'learnspark123' }}" \
             -PKEY_ALIAS="${{ secrets.KEY_ALIAS || 'learnspark' }}" \

@@ -1,0 +1,54 @@
+# ============================================================
+#  强制文本文件使用 LF 行尾
+#  避免 Windows 上 checkout 时被转成 CRLF，导致 Linux CI
+#  上 Gradle/Groovy 解析器因 \r 报错
+# ============================================================
+
+# Gradle / Groovy 脚本（CRLF 会导致 Gradle 解析异常）
+*.gradle        text eol=lf
+*.gradle.kts    text eol=lf
+gradle.properties text eol=lf
+
+# Shell 脚本
+*.sh            text eol=lf
+
+# YAML 配置（CI workflow）
+*.yml           text eol=lf
+*.yaml          text eol=lf
+
+# XML 资源
+*.xml           text eol=lf
+
+# ProGuard 规则
+*.pro           text eol=lf
+
+# Properties
+*.properties    text eol=lf
+
+# TypeScript / JavaScript
+*.ts            text eol=lf
+*.js            text eol=lf
+*.mjs           text eol=lf
+*.cjs           text eol=lf
+*.json          text eol=lf
+
+# Vue
+*.vue           text eol=lf
+
+# Markdown
+*.md            text eol=lf
+
+# 二进制文件（不做行尾转换）
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.woff          binary
+*.woff2         binary
+*.ttf           binary
+*.eot           binary
+*.keystore      binary
+*.jks           binary
+*.apk           binary
+*.aab           binary
