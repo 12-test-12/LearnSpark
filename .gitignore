@@ -1,0 +1,59 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### 日志 ###
+*.log
+logs/
+
+### 本地配置 ###
+application-local.yml
+
+### Capacitor / Android 构建产物 ###
+# Android Gradle
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/captures/
+frontend/android/local.properties
+frontend/android/.idea/
+frontend/android/app/release/
+frontend/android/.cxx/
+
+# Keystore（生产密钥，禁止入库）
+*.keystore
+*.jks
+frontend/android/app/*.keystore
+
+# Gradle 用户级配置
+.gradle/

@@ -1,0 +1,46 @@
+{
+  "name": "learnspark-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:android": "vite build --base=./",
+    "preview": "vite preview",
+    "cap:sync": "cap sync android",
+    "cap:open:android": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@types/canvas-confetti": "^1.9.0",
+    "@vicons/ionicons5": "^0.12.0",
+    "axios": "^1.7.7",
+    "canvas-confetti": "^1.9.4",
+    "dompurify": "^3.4.12",
+    "marked": "^18.0.6",
+    "naive-ui": "^2.39.0",
+    "pinia": "^3.0.0",
+    "pinia-plugin-persistedstate": "^4.1.0",
+    "vfonts": "^0.0.3",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@types/dompurify": "^3.0.5",
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "sass": "^1.80.0",
+    "typescript": "~5.6.3",
+    "unplugin-auto-import": "^0.18.4",
+    "unplugin-vue-components": "^0.27.4",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.20.5",
+    "vite-plugin-vue-devtools": "^7.6.4"
+  },
+  "engines": {
+    "node": "^18.18.0 || ^20.9.0 || >=22.0.0"
+  }
+}
