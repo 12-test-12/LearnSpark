@@ -167,8 +167,12 @@ jobs:
             echo "  ✓ namespace = com.learnspark.app" || { echo "  ✗ namespace 错误！"; exit 1; }
           grep -q 'applicationId "com.learnspark.app"' "$APP_DIR/build.gradle" && \
             echo "  ✓ applicationId = com.learnspark.app（已对齐 namespace）" || { echo "  ✗ applicationId 错误！"; exit 1; }
-          grep -q 'signingConfigs' "$APP_DIR/build.gradle" && \
-            echo "  ✓ signingConfigs 块已就位" || { echo "  ✗ signingConfigs 缺失！"; exit 1; }
+          if grep -qE "^\s*signingConfigs\s*\{" "$APP_DIR/build.gradle"; then
+            echo "  ✓ signingConfigs 块已就位"
+          else
+            echo "  ✗ signingConfigs 块缺失！"
+            exit 1
+          fi
           grep -q 'signingConfig signingConfigs.release' "$APP_DIR/build.gradle" && \
             echo "  ✓ release buildType 引用 signingConfigs.release" || { echo "  ✗ signingConfig 引用缺失！"; exit 1; }
           if grep -q 'minifyEnabled[[:space:]]*true' "$APP_DIR/build.gradle"; then
@@ -177,9 +181,13 @@ jobs:
           else
             echo "  ✓ minifyEnabled 保持 false（避免 R8 删除反射类）"
           fi
-          grep -q "proguard-rules.pro" "$APP_DIR/build.gradle" && \
-            echo "  ✓ proguardFiles 已引用 proguard-rules.pro" || { echo "  ✗ proguardFiles 引用缺失！"; exit 1; }
-          if grep -q 'aaptOptions' "$APP_DIR/build.gradle"; then
+          if grep -qE "proguardFiles.*proguard-rules\.pro" "$APP_DIR/build.gradle"; then
+            echo "  ✓ proguardFiles 已引用 proguard-rules.pro"
+          else
+            echo "  ✗ proguardFiles 未引用 proguard-rules.pro！"
+            exit 1
+          fi
+          if grep -q 'aaptOptions[[:space:]]*{' "$APP_DIR/build.gradle" || grep -q 'aaptOptions[[:space:]]*(' "$APP_DIR/build.gradle"; then
             echo "  ✗ aaptOptions 是 AGP 8.x 已移除的 DSL，必须删除！"
             exit 1
           else
