@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:android": "vite build --base=./",
+    "build:android": "cross-env CAPACITOR_BUILD=true vite build",
     "preview": "vite preview",
     "cap:sync": "cap sync android",
     "cap:open:android": "cap open android"
@@ -32,6 +32,7 @@
     "@types/dompurify": "^3.0.5",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^5.2.1",
+    "cross-env": "^7.0.3",
     "sass": "^1.80.0",
     "typescript": "~5.6.3",
     "unplugin-auto-import": "^0.18.4",

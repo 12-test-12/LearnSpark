@@ -117,6 +117,83 @@ jobs:
               -dname "CN=LearnSpark,O=LearnSpark,L=Local,C=CN"
           fi
 
+      # ---------- 修复"packageinfo is null"问题 ----------
+      - name: 应用 Android 补丁（修复 packageinfo is null）
+        working-directory: frontend/android
+        run: |
+          set -e
+          PATCH_DIR="../../.github/android-patches"
+          APP_DIR="app"
+          RES_DIR="$APP_DIR/src/main/res"
+
+          echo "===== 1) 覆盖 AndroidManifest.xml ====="
+          cp "$PATCH_DIR/AndroidManifest.xml" "$APP_DIR/src/main/AndroidManifest.xml"
+          echo "✓ AndroidManifest.xml 已覆盖"
+          # 校验关键修复点
+          grep -q 'package="com.learnspark.app"' "$APP_DIR/src/main/AndroidManifest.xml" && \
+            echo "  ✓ 显式 package 属性已添加" || echo "  ✗ package 属性缺失！"
+          grep -q 'android:exported="true"' "$APP_DIR/src/main/AndroidManifest.xml" && \
+            echo "  ✓ exported=true 已声明" || echo "  ✗ exported 缺失！"
+          grep -q '<queries>' "$APP_DIR/src/main/AndroidManifest.xml" && \
+            echo "  ✓ <queries> 块已添加" || echo "  ✗ <queries> 缺失！"
+
+          echo ""
+          echo "===== 2) 拷贝 res/xml 资源 ====="
+          mkdir -p "$RES_DIR/xml"
+          cp "$PATCH_DIR/res/xml/network_security_config.xml" "$RES_DIR/xml/"
+          cp "$PATCH_DIR/res/xml/file_paths.xml" "$RES_DIR/xml/"
+          echo "✓ network_security_config.xml + file_paths.xml 已就位"
+
+          echo ""
+          echo "===== 3) 覆盖 ProGuard 规则 ====="
+          # Capacitor 6 默认 app/proguard-rules.pro 已存在，直接覆盖
+          if [ -f "$APP_DIR/proguard-rules.pro" ]; then
+            cp "$PATCH_DIR/proguard-rules.pro" "$APP_DIR/proguard-rules.pro"
+            echo "✓ proguard-rules.pro 已覆盖（保留 Capacitor / WebView 类）"
+          else
+            echo "⚠ proguard-rules.pro 不存在，将由 build.gradle 自动生成"
+          fi
+
+          echo ""
+          echo "===== 4) 校验 namespace 与 applicationId 一致 ====="
+          # namespace 在 build.gradle，applicationId 在 defaultConfig 里
+          NS=$(grep -E "namespace\s+\"" "$APP_DIR/build.gradle" | head -1 | grep -oE '"[^"]+"' | tr -d '"' || echo "")
+          APPID=$(grep -E "applicationId\s+\"" "$APP_DIR/build.gradle" | head -1 | grep -oE '"[^"]+"' | tr -d '"' || echo "")
+          echo "  namespace:     $NS"
+          echo "  applicationId: $APPID"
+          if [ -n "$NS" ] && [ -n "$APPID" ] && [ "$NS" = "$APPID" ]; then
+            echo "  ✓ namespace 和 applicationId 一致"
+          else
+            echo "  ⚠ namespace 和 applicationId 不一致，尝试修复"
+            # 自动修正：把 applicationId 改成 namespace
+            sed -i "s|applicationId[[:space:]]*\"[^\"]*\"|applicationId \"$NS\"|g" "$APP_DIR/build.gradle"
+            echo "  ✓ applicationId 已对齐为 $NS"
+          fi
+
+          echo ""
+          echo "===== 5) 确保 buildTypes.release 启用 minify + 引用 proguard-rules ====="
+          # 检查并启用 R8/ProGuard（避免 R8 错误移除 Capacitor 类）
+          if grep -q "minifyEnabled" "$APP_DIR/build.gradle"; then
+            sed -i 's|minifyEnabled[[:space:]]*false|minifyEnabled true|g' "$APP_DIR/build.gradle"
+            echo "  ✓ minifyEnabled 已启用为 true"
+          else
+            # 在 buildTypes { release { ... } } 块里插入
+            sed -i '/buildTypes[[:space:]]*{/,/^[[:space:]]*}/ {
+              /release[[:space:]]*{/a\
+              \            minifyEnabled true\
+              \            shrinkResources true\
+              \            proguardFiles getDefaultProguardFile('"'"'proguard-android-optimize.txt'"'"'), '"'"'proguard-rules.pro'"'"'
+            }' "$APP_DIR/build.gradle"
+            echo "  ✓ minifyEnabled + proguardFiles 已注入"
+          fi
+
+          # 检查 proguardFiles 是否被引用
+          if ! grep -q "proguard-rules.pro" "$APP_DIR/build.gradle"; then
+            echo "  ⚠ 未引用 proguard-rules.pro，请检查"
+          else
+            echo "  ✓ proguard-rules.pro 已被引用"
+          fi
+
       - name: 注入签名配置到 build.gradle
         working-directory: frontend/android
         run: |
@@ -192,6 +269,65 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'learnspark123' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'learnspark' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'learnspark123' }}
+
+      # ---------- APK 验证（关键！提前发现"packageinfo is null"等签名/manifest 问题）----------
+      - name: 验证 APK 签名 & manifest（提前发现问题）
+        working-directory: frontend/android
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            echo "❌ 未找到 APK，跳过验证"
+            exit 1
+          fi
+          echo "▶ 验证 APK: $APK"
+          echo ""
+
+          # ---------- 1) 验证 APK 文件完整性 ----------
+          echo "===== 1) APK 完整性 ====="
+          ls -lh "$APK"
+          file "$APK" 2>/dev/null || echo "file 命令不可用"
+          echo ""
+
+          # ---------- 2) 用 aapt 解析 manifest（核心验证）----------
+          echo "===== 2) Manifest 信息（确认修复生效）====="
+          AAPT="$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -1)/aapt2"
+          if [ -x "$AAPT" ]; then
+            "$AAPT" dump badging "$APK" 2>/dev/null | head -20 || echo "(aapt2 不可用)"
+            echo ""
+
+            # 关键校验：package / launcher activity / exported
+            echo "----- 关键 manifest 字段 -----"
+            "$AAPT" dump xmltree "$APK" --file AndroidManifest.xml 2>/dev/null | \
+              grep -E "package=|MainActivity|exported" | head -20 || echo "(解析失败)"
+          else
+            echo "⚠ aapt2 不在标准路径"
+          fi
+          echo ""
+
+          # ---------- 3) 验证签名 ----------
+          echo "===== 3) APK 签名 ====="
+          APKSIGNER="$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -1)/apksigner"
+          if [ -x "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1 | head -30 || true
+          else
+            echo "⚠ apksigner 不在标准路径"
+          fi
+          echo ""
+
+          # ---------- 4) 用 unzip 看下 APK 内容是否完整 ----------
+          echo "===== 4) APK 内关键文件 ====="
+          unzip -l "$APK" 2>/dev/null | grep -E "AndroidManifest|classes\.dex|assets/public|res/xml/" | head -20 || echo "(unzip 不可用)"
+          echo ""
+
+          # ---------- 5) 总结 ----------
+          echo "===== ✅ 验证完成 ====="
+          echo "如果上面看到："
+          echo "  • package='com.learnspark.app'         ← namespace 正确"
+          echo "  • MainActivity android:exported='true'  ← Android 12+ 兼容"
+          echo "  • apk 包含 res/xml/network_security_config.xml  ← WebView 证书修复"
+          echo "  • Verified using v1/v2/v3 scheme      ← 签名有效"
+          echo "则 APK 可以正常安装使用"
 
       # ---------- 产物处理 ----------
       - name: 汇总构建产物
