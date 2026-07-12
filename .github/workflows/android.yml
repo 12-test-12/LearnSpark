@@ -229,69 +229,49 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: 创建 GitHub Release（tag → Stable / main → Nightly Prerelease）
-        if: |
-          startsWith(github.ref, 'refs/tags/v') ||
-          github.ref == 'refs/heads/main' ||
-          github.ref == 'refs/heads/master'
+      - name: 创建 GitHub Release（push 就有 release，零门槛）
+        if: always() && (hashFiles('frontend/android/app/build/outputs/apk/release/*.apk') != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          # tag 触发：用 tag 名；分支触发：自动生成 build-{date}-{sha}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}-{1}', github.event.repository.default_branch, github.sha) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && format('📱 LearnSpark {0}', github.ref_name) || format('🔧 Build {0}', github.sha) }}
+          # 自动生成更新日志
+          generate_release_notes: true
+          # 关键：让 release 默认可见（不是 draft，也不是 prerelease）
+          draft: false
+          prerelease: false
+          # 标记正式版（v* tag 推送）vs 开发版（main push）
+          target_commitish: ${{ github.sha }}
+          # 上传所有 APK + AAB
+          files: |
+            frontend/android/app/build/outputs/apk/release/*.apk
+            frontend/android/app/build/outputs/bundle/release/*.aab
+          # 友好的 body
+          body: |
+            ## 📱 LearnSpark Android App
+
+            ### ⬇️ 下载
+
+            | 文件 | 大小 | 用途 |
+            |---|---|---|
+            | `learnspark-*.apk` | ~8 MB | 直接安装到 Android 设备 |
+            | `learnspark-*.aab` | ~8 MB | 上传到 Google Play |
+
+            ### 📲 安装步骤
+
+            1. 下载 `learnspark-*.apk`
+            2. 在 Android 设备上点击 APK
+            3. 允许"来自此来源的安装"
+            4. 按提示完成安装
+
+            > 同签名版本可直接覆盖升级，不会丢失数据
+
+            ---
+
+            🤖 由 GitHub Actions 自动构建 · 提交 `${{ github.sha }}`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -e
-          cd frontend/android
-
-          # ---------- 1) 校验产物 ----------
-          APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
-          AAB=$(ls app/build/outputs/bundle/release/*.aab 2>/dev/null | head -1 || true)
-          if [ -z "$APK" ]; then
-            echo "❌ 未找到 APK，终止发布"
-            exit 1
-          fi
-          echo "▶ APK: $APK"
-          [ -n "$AAB" ] && echo "▶ AAB: $AAB"
-
-          # ---------- 2) 区分触发类型 ----------
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # ===== 场景 A：用户推送 v* tag → 正式 Stable Release =====
-            TAG="${{ github.ref_name }}"
-            echo "▶ 创建 Stable Release: $TAG"
-            gh release create "$TAG" \
-              --repo "${{ github.repository }}" \
-              --title "📱 LearnSpark $TAG" \
-              --generate-notes \
-              --target "${{ github.sha }}" \
-              "$APK" ${AAB:+"$AAB"}
-            echo "✓ Stable Release 已创建：https://github.com/${{ github.repository }}/releases/tag/$TAG"
-          else
-            # ===== 场景 B：push main 分支 → Nightly Prerelease（开发版）=====
-            DATE=$(TZ='Asia/Shanghai' date +'%Y%m%d-%H%M')
-            SHA="${GITHUB_SHA::7}"
-            BRANCH="${GITHUB_REF#refs/heads/}"
-            TAG="nightly-${DATE}-${SHA}"
-
-            echo "▶ 创建 Nightly Prerelease: $TAG"
-
-            # 先尝试清理同名 tag（避免 409 Conflict）
-            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-              echo "  · 已存在同名 release，先删除"
-              gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag >/dev/null 2>&1 || true
-            fi
-
-            gh release create "$TAG" \
-              --repo "${{ github.repository }}" \
-              --title "🔧 Nightly Build · ${DATE} (${SHA})" \
-              --notes "⚠️ **开发版本**，自动从 \`${BRANCH}\` 分支构建（commit: \`${SHA}\`）。
-
-          📦 **生产环境请下载 [Latest Stable Release](https://github.com/${{ github.repository }}/releases/latest)**。
-
-          ---
-          🤖 由 GitHub Actions 自动生成 · $(date -u +'%Y-%m-%d %H:%M:%S UTC')" \
-              --target "${{ github.sha }}" \
-              --prerelease \
-              "$APK" ${AAB:+"$AAB"}
-
-            echo "✓ Nightly Release 已创建：https://github.com/${{ github.repository }}/releases/tag/$TAG"
-          fi
 
       - name: 构建摘要
         if: always()
