@@ -92,7 +92,19 @@ jobs:
 
       - name: 同步 Web 资源到 Android
         working-directory: frontend
-        run: npx cap sync android
+        run: |
+          npx cap sync android
+          # 关键诊断：检查 capacitor.settings.gradle 是否生成
+          # 该文件由 cap sync 在检测到第三方 Capacitor 插件时生成
+          SETTINGS_FILE="android/app/capacitor.settings.gradle"
+          if [ -f "$SETTINGS_FILE" ]; then
+            echo "✓ $SETTINGS_FILE 已生成（项目含 Capacitor 插件）"
+            echo "  ----- 文件内容 -----"
+            cat "$SETTINGS_FILE" | sed 's/^/    /'
+          else
+            echo "ℹ $SETTINGS_FILE 未生成（项目无第三方 Capacitor 插件，这是正常的）"
+            echo "  app/build.gradle 模板已用 file.exists() 保护，构建不会因此失败"
+          fi
 
       # ---------- 签名注入 ----------
       - name: 注入 Keystore

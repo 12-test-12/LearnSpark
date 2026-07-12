@@ -66,4 +66,16 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
 }
 
-apply from: 'capacitor.settings.gradle'
+// ============================================================
+// 条件加载 capacitor.settings.gradle
+// 该文件由 cap sync 在存在第三方 Capacitor 插件时生成。
+// 当前项目只依赖 @capacitor/core + @capacitor/android（无插件），
+// 所以 cap sync 不会生成此文件。这里用 file.exists() 保护，
+// 避免文件不存在时 Gradle 评估失败。
+// 将来如果引入 @capacitor/haptics 等插件，cap sync 会自动生成此文件，
+// 这行 apply 也会自动生效，无需手动修改本模板。
+// ============================================================
+def capacitorSettingsFile = file('capacitor.settings.gradle')
+if (capacitorSettingsFile.exists()) {
+    apply from: capacitorSettingsFile
+}
