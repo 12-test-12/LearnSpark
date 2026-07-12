@@ -40,6 +40,9 @@ logs/
 application-local.yml
 
 ### Capacitor / Android 构建产物 ###
+# Android 工程本身（不入仓，CI 通过 cap add 重新生成 + 模板覆盖）
+frontend/android/
+
 # Android Gradle
 frontend/android/.gradle/
 frontend/android/build/
