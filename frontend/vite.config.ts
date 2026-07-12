@@ -18,16 +18,26 @@ import { fileURLToPath, URL } from 'node:url'
  *     - SW 会拦截 WebView 的 fetch，与 Capacitor 的本地资源加载冲突
  *     - navigateFallback: '/index.html' 在 WebView 中会触发循环重定向
  *     - 部分 WebView 实现下，SW 注册失败导致 Bridge 启动超时
+ *
+ *  使用方式：
+ *    npm run build           # 普通 Web 构建
+ *    npm run build:android   # Capacitor 构建（自动识别 mode=capacitor）
  * ============================================================
  */
-
-// 是否在 Capacitor 模式下构建（CI 中通过 CAPACITOR_BUILD=true 注入）
-const isCapacitorBuild = process.env.CAPACITOR_BUILD === 'true'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // 加载 .env 文件
+  // Capacitor 模式加载 .env.capacitor（可选）
   const env = loadEnv(mode, process.cwd(), '')
+
+  // 是否在 Capacitor 模式下构建
+  // 通过 `vite build --mode capacitor` 触发
+  // 同时兼容直接设置环境变量
+  const isCapacitorBuild =
+    mode === 'capacitor' ||
+    process.env.CAPACITOR_BUILD === 'true' ||
+    process.env.CAPACITOR === 'true'
 
   return {
     // ===== 关键修复 1: 相对路径 =====
