@@ -16,6 +16,11 @@ apply plugin: 'com.android.application'
 //     - 不在 gradle 文件里硬编码密码
 //  4. buildTypes.release 显式引用 proguard-rules.pro
 //     - 即使 minifyEnabled=false，引用关系保持稳定
+//
+//  严格遵循 Capacitor 6.1.2 官方模板结构：
+//  - 不使用已弃用的 aaptOptions（AGP 8.x 已移除）
+//  - 不使用已弃用的 compileSdkVersion（用 compileSdk）
+//  - 保留 apply from: 'capacitor.settings.gradle' 加载插件 include
 // ============================================================
 
 android {
@@ -50,11 +55,6 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
-    }
-
-    // ===== 资源打包兼容（避免 split/aapt2 报错）=====
-    aaptOptions {
-        ignoreAssetsPattern '!.svn:!.git:!.DS_Store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
 }
 

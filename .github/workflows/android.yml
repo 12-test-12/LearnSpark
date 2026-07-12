@@ -157,6 +157,11 @@ jobs:
           cp "$PATCH_DIR/app/build.gradle" "$APP_DIR/build.gradle"
           echo "  ✓ app/build.gradle 已用模板覆盖"
 
+          # 打印模板前 30 行（调试用：确认 cp 真的生效）
+          echo "  ----- app/build.gradle 前 30 行 -----"
+          head -30 "$APP_DIR/build.gradle" | sed 's/^/    /'
+          echo "  ------------------------------------"
+
           # 校验关键字段
           grep -q 'namespace "com.learnspark.app"' "$APP_DIR/build.gradle" && \
             echo "  ✓ namespace = com.learnspark.app" || { echo "  ✗ namespace 错误！"; exit 1; }
@@ -174,6 +179,12 @@ jobs:
           fi
           grep -q "proguard-rules.pro" "$APP_DIR/build.gradle" && \
             echo "  ✓ proguardFiles 已引用 proguard-rules.pro" || { echo "  ✗ proguardFiles 引用缺失！"; exit 1; }
+          if grep -q 'aaptOptions' "$APP_DIR/build.gradle"; then
+            echo "  ✗ aaptOptions 是 AGP 8.x 已移除的 DSL，必须删除！"
+            exit 1
+          else
+            echo "  ✓ 未使用已弃用的 aaptOptions（AGP 8.x 兼容）"
+          fi
 
       # ---------- Gradle 构建 ----------
       - name: 启用 Gradle 缓存
