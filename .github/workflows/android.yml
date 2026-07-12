@@ -142,14 +142,13 @@ jobs:
           echo "✓ network_security_config.xml + file_paths.xml 已就位"
 
           echo ""
-          echo "===== 3) 覆盖 ProGuard 规则 ====="
-          # Capacitor 6 默认 app/proguard-rules.pro 已存在，直接覆盖
-          if [ -f "$APP_DIR/proguard-rules.pro" ]; then
-            cp "$PATCH_DIR/proguard-rules.pro" "$APP_DIR/proguard-rules.pro"
-            echo "✓ proguard-rules.pro 已覆盖（保留 Capacitor / WebView 类）"
-          else
-            echo "⚠ proguard-rules.pro 不存在，将由 build.gradle 自动生成"
-          fi
+          echo "===== 3) 强制写入 ProGuard 规则（关键！）====="
+          # 不管 Capacitor 有没有生成，都强制写入，确保 R8 不会误删 Capacitor 类
+          cp "$PATCH_DIR/proguard-rules.pro" "$APP_DIR/proguard-rules.pro"
+          echo "✓ proguard-rules.pro 已写入（保留 Capacitor / WebView 类）"
+          # 确认关键 keep 规则存在
+          grep -q 'keep class com.getcapacitor' "$APP_DIR/proguard-rules.pro" && \
+            echo "  ✓ Capacitor keep 规则已确认" || echo "  ✗ Capacitor keep 规则缺失！"
 
           echo ""
           echo "===== 4) 校验 namespace 与 applicationId 一致 ====="
@@ -168,27 +167,25 @@ jobs:
           fi
 
           echo ""
-          echo "===== 5) 确保 buildTypes.release 启用 minify + 引用 proguard-rules ====="
-          # 检查并启用 R8/ProGuard（避免 R8 错误移除 Capacitor 类）
-          if grep -q "minifyEnabled" "$APP_DIR/build.gradle"; then
-            sed -i 's|minifyEnabled[[:space:]]*false|minifyEnabled true|g' "$APP_DIR/build.gradle"
-            echo "  ✓ minifyEnabled 已启用为 true"
+          echo "===== 5) 确保 buildTypes.release 引用 proguard-rules.pro ====="
+          # 关键修复：确保 proguard-rules.pro 被 release build type 引用
+          if grep -q "proguard-rules.pro" "$APP_DIR/build.gradle"; then
+            echo "  ✓ proguard-rules.pro 已被 buildTypes.release 引用"
           else
-            # 在 buildTypes { release { ... } } 块里插入
-            sed -i '/buildTypes[[:space:]]*{/,/^[[:space:]]*}/ {
-              /release[[:space:]]*{/a\
-              \            minifyEnabled true\
-              \            shrinkResources true\
-              \            proguardFiles getDefaultProguardFile('"'"'proguard-android-optimize.txt'"'"'), '"'"'proguard-rules.pro'"'"'
-            }' "$APP_DIR/build.gradle"
-            echo "  ✓ minifyEnabled + proguardFiles 已注入"
+            echo "  ⚠ 未引用 proguard-rules.pro，尝试注入..."
+            # 在 release { 块中添加 proguardFiles
+            sed -i '/release[[:space:]]*{/a\            proguardFiles getDefaultProguardFile('"'"'proguard-android-optimize.txt'"'"'), '"'"'proguard-rules.pro'"'"'' "$APP_DIR/build.gradle"
+            echo "  ✓ proguardFiles 已注入"
           fi
 
-          # 检查 proguardFiles 是否被引用
-          if ! grep -q "proguard-rules.pro" "$APP_DIR/build.gradle"; then
-            echo "  ⚠ 未引用 proguard-rules.pro，请检查"
+          # 确认 minifyEnabled 设置 — 只修改 false→true，不做其他改动
+          if grep -q "minifyEnabled[[:space:]]*false" "$APP_DIR/build.gradle"; then
+            sed -i 's|minifyEnabled[[:space:]]*false|minifyEnabled true|g' "$APP_DIR/build.gradle"
+            echo "  ✓ minifyEnabled false → true（R8 启用）"
+          elif grep -q "minifyEnabled[[:space:]]*true" "$APP_DIR/build.gradle"; then
+            echo "  ✓ minifyEnabled 已为 true"
           else
-            echo "  ✓ proguard-rules.pro 已被引用"
+            echo "  ⚠ 未找到 minifyEnabled，保持 Capacitor 默认值"
           fi
 
       - name: 注入签名配置到 build.gradle
@@ -197,17 +194,14 @@ jobs:
           set -e
           GRADLE=app/build.gradle
 
-          # ---------- 1) 准备签名块（4 空格缩进，作为 android { 的子块）----------
-          # AGP 8.x 要求 signingConfigs 必须是 android {} 块的子节点
+          # ---------- 1) 准备签名块（无条件的，因为我们会通过 -P 传参）----------
           cat > /tmp/__sign_block__.gradle <<'SIGNBLOCK'
               signingConfigs {
                   release {
-                      if (project.hasProperty("KEYSTORE_FILE")) {
-                          storeFile file(KEYSTORE_FILE)
-                          storePassword KEYSTORE_PASSWORD
-                          keyAlias KEY_ALIAS
-                          keyPassword KEY_PASSWORD
-                      }
+                      storeFile file(KEYSTORE_FILE)
+                      storePassword KEYSTORE_PASSWORD
+                      keyAlias KEY_ALIAS
+                      keyPassword KEY_PASSWORD
                   }
               }
           SIGNBLOCK
@@ -231,9 +225,24 @@ jobs:
             echo "✓ signingConfigs { release { ... } } 已作为 android { 的第一个子块插入"
           fi
 
-          # ---------- 4) 把 release 的 signingConfig 从 debug 改为 release ----------
-          sed -i 's|signingConfig[[:space:]]\+signingConfigs\.debug|signingConfig signingConfigs.release|g' "$GRADLE"
-          echo "✓ 已将 buildTypes.release 的 signingConfig 指向 release"
+          # ---------- 4) 确保 release build type 引用 release signingConfig ----------
+          # 策略：先尝试替换 debug → release，若都不存在则在 release 块里注入
+          if grep -q "signingConfig" "$GRADLE"; then
+            sed -i 's|signingConfig[[:space:]]\+signingConfigs\.debug|signingConfig signingConfigs.release|g' "$GRADLE"
+            echo "✓ 已将 signingConfig 从 debug 改为 release"
+          else
+            echo "⚠ buildTypes.release 无 signingConfig，注入..."
+            # 在 release { ... } 块的第一行之后插入 signingConfig
+            RELEASE_LINE=$(grep -nE 'release[[:space:]]*\{' "$GRADLE" | head -n1 | cut -d: -f1)
+            if [ -n "$RELEASE_LINE" ]; then
+              head -n "$RELEASE_LINE" "$GRADLE" > /tmp/__before_signcfg__.gradle
+              tail -n +$((RELEASE_LINE + 1)) "$GRADLE" > /tmp/__after_signcfg__.gradle
+              cat /tmp/__before_signcfg__.gradle > "$GRADLE"
+              echo '            signingConfig signingConfigs.release' >> "$GRADLE"
+              cat /tmp/__after_signcfg__.gradle >> "$GRADLE"
+              echo "✓ signingConfig signingConfigs.release 已注入"
+            fi
+          fi
 
           # ---------- 5) 校验 ----------
           echo "===== build.gradle 头部预览（前 30 行）====="
@@ -251,21 +260,22 @@ jobs:
 
       - name: 构建 Release APK
         working-directory: frontend/android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
-        env:
-          KEYSTORE_FILE: learnspark.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'learnspark123' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'learnspark' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'learnspark123' }}
+        run: |
+          ./gradlew assembleRelease --no-daemon --stacktrace \
+            -PKEYSTORE_FILE=learnspark.keystore \
+            -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD || 'learnspark123' }}" \
+            -PKEY_ALIAS="${{ secrets.KEY_ALIAS || 'learnspark' }}" \
+            -PKEY_PASSWORD="${{ secrets.KEY_PASSWORD || 'learnspark123' }}"
 
       - name: 构建 Release AAB（Google Play 上架）
         working-directory: frontend/android
-        run: ./gradlew bundleRelease --no-daemon --stacktrace || echo "⚠ AAB 构建失败，可忽略"
-        env:
-          KEYSTORE_FILE: learnspark.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'learnspark123' }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'learnspark' }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'learnspark123' }}
+        run: |
+          ./gradlew bundleRelease --no-daemon --stacktrace \
+            -PKEYSTORE_FILE=learnspark.keystore \
+            -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD || 'learnspark123' }}" \
+            -PKEY_ALIAS="${{ secrets.KEY_ALIAS || 'learnspark' }}" \
+            -PKEY_PASSWORD="${{ secrets.KEY_PASSWORD || 'learnspark123' }}" \
+            || echo "⚠ AAB 构建失败，可忽略"
 
       # ---------- APK 验证（关键！提前发现"packageinfo is null"等签名/manifest 问题）----------
       - name: 验证 APK 签名 & manifest（提前发现问题）
