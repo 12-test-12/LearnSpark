@@ -601,6 +601,34 @@ class StatsRepository {
     )
     return (result.values?.[0]?.cnt as number) ?? 0
   }
+
+  /** 获取任务状态统计（总任务数 + 各状态数量） */
+  async getTaskStatusCount(): Promise<{
+    total: number
+    pending: number
+    passed: number
+    submitted: number
+    failed: number
+  }> {
+    const db = await getDatabase()
+    const result = await db.query(
+      `SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'pending'   THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'passed'    THEN 1 ELSE 0 END) as passed,
+        SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as submitted,
+        SUM(CASE WHEN status = 'failed'    THEN 1 ELSE 0 END) as failed
+       FROM tasks WHERE deleted_at IS NULL`
+    )
+    const row = result.values?.[0] ?? {}
+    return {
+      total:     (row.total     as number) ?? 0,
+      pending:   (row.pending   as number) ?? 0,
+      passed:    (row.passed    as number) ?? 0,
+      submitted: (row.submitted as number) ?? 0,
+      failed:    (row.failed    as number) ?? 0,
+    }
+  }
 }
 
 // ============================================================

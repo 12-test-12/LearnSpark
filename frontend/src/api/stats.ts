@@ -2,7 +2,6 @@
  * 统计 API（离线版）— 接口签名不变，底层改为 SQLite
  */
 import { statsRepo, taskRepo, gamificationRepo } from '@/db/repositories'
-import { today } from '@/db/database'
 
 export interface ProjectStats {
   totalTasks: number
@@ -44,6 +43,10 @@ export interface DashboardData {
   totalPoints: number
   knowledgeCount: number
   dailyQuote: string
+  /** 所有未删除任务总数（用于整体完成率） */
+  totalTasks: number
+  /** 已通过任务总数 */
+  passedTasks: number
 }
 
 export interface DailyActivity {
@@ -95,24 +98,37 @@ export async function getUserStats(): Promise<UserStats> {
 }
 
 export async function getDashboard(): Promise<DashboardData> {
-  const todayStr = today()
+  // 待办任务列表：所有 pending 任务（不论 due_date）+ 今日已通过的任务
+  // 这样用户创建的任务（due_date 默认为 null）也能在仪表盘上看到
+  // 排序：pending 在前、今日 passed 在后；有 due_date 的在前；按 due_date 升序
   const todayTasks = await taskRepo.findAll(
-    "deleted_at IS NULL AND due_date = ? AND status = 'pending'",
-    [todayStr],
-    'sort_order ASC'
+    `deleted_at IS NULL AND (
+      status = 'pending'
+      OR (status = 'passed' AND date(completed_at) = date('now'))
+    )`,
+    [],
+    `CASE WHEN status = 'passed' THEN 1 ELSE 0 END,
+     CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,
+     due_date ASC,
+     sort_order ASC`
   )
+
+  // 任务状态统计（用于整体完成率）
+  const taskStats = await statsRepo.getTaskStatusCount()
   const maxStreakDays = await statsRepo.getMaxStreak()
   const totalPoints = await gamificationRepo.getTotalPoints()
   const knowledgeCount = await statsRepo.getKnowledgeCount()
   const quote = DAILY_QUOTES[new Date().getDate() % DAILY_QUOTES.length]
 
   return {
-    todayPendingCount: todayTasks.length,
+    todayPendingCount: taskStats.pending,
     todayTasks: todayTasks as unknown as DashboardTask[],
     maxStreakDays,
     totalPoints,
     knowledgeCount,
     dailyQuote: quote,
+    totalTasks: taskStats.total,
+    passedTasks: taskStats.passed,
   }
 }
 

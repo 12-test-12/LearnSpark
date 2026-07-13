@@ -43,27 +43,26 @@ async function loadData() {
   loading.value = false
 }
 
-/** 今日任务进度（0-100，用于线形进度条） */
+/** 整体完成率（已通过 / 总任务数，用于线形进度条） */
 const todayProgress = computed(() => {
   if (!dashboard.value) return 0
-  const total = dashboard.value.todayTasks.length
-  if (total === 0) return 100
-  const done = dashboard.value.todayTasks.filter(t => t.status === 'passed' || t.status === 'PASSED').length
-  return Math.round((done / total) * 100)
+  const total = dashboard.value.totalTasks
+  if (total === 0) return 0
+  return Math.round((dashboard.value.passedTasks / total) * 100)
 })
 
-/** 今日完成数（用于 "0/3" 展示） */
+/** 已通过任务总数（用于 "X / Y" 展示） */
 const todayDoneCount = computed(() => {
   if (!dashboard.value) return 0
-  return dashboard.value.todayTasks.filter(t => t.status === 'passed' || t.status === 'PASSED').length
+  return dashboard.value.passedTasks
 })
 
 /** 是否需要空数据引导（数据库是空的） */
 const isFirstTime = computed(() => {
   if (!dashboard.value) return false
-  return dashboard.value.totalPoints === 0
+  return dashboard.value.totalTasks === 0
+    && dashboard.value.totalPoints === 0
     && dashboard.value.knowledgeCount === 0
-    && dashboard.value.todayTasks.length === 0
     && dashboard.value.maxStreakDays === 0
 })
 
@@ -73,7 +72,8 @@ function statusInfo(status: string): { label: string; type: 'default' | 'success
   const map: Record<string, { label: string; type: 'default' | 'success' | 'warning' | 'info' | 'error' }> = {
     PASSED:    { label: '已完成', type: 'success' },
     SUBMITTED: { label: '审核中', type: 'warning' },
-    PENDING:   { label: '未开始', type: 'default' },
+    PENDING:   { label: '待办', type: 'default' },
+    FAILED:    { label: '未通过', type: 'error' },
     REJECTED:  { label: '未通过', type: 'error' },
   }
   return map[normalized] ?? { label: status || '未知', type: 'default' }
@@ -143,7 +143,7 @@ onMounted(loadData)
             <n-icon :component="CalendarOutline" :size="22" />
           </div>
           <div class="stat-body">
-            <div class="stat-label">今日待完成</div>
+            <div class="stat-label">待办任务</div>
             <div class="stat-value">
               <span class="num">{{ dashboard.todayPendingCount }}</span>
               <span class="unit">项</span>
@@ -178,24 +178,24 @@ onMounted(loadData)
         </div>
       </div>
 
-      <!-- 4. 主体：今日任务（置顶，移动端用户最关心的） -->
+      <!-- 4. 主体：待办任务（置顶，移动端用户最关心的） -->
       <div class="section-card section-card-priority">
         <div class="section-header">
           <div class="section-title">
             <n-icon :component="ArrowForwardOutline" :size="18" color="#18a058" />
-            <span>今日任务</span>
+            <span>待办任务</span>
             <n-tag
-              v-if="dashboard.todayTasks.length > 0"
+              v-if="dashboard.totalTasks > 0"
               size="tiny"
               round
               :bordered="false"
               type="success"
             >
-              {{ todayDoneCount }} / {{ dashboard.todayTasks.length }}
+              {{ todayDoneCount }} / {{ dashboard.totalTasks }}
             </n-tag>
           </div>
           <n-progress
-            v-if="dashboard.todayTasks.length > 0"
+            v-if="dashboard.totalTasks > 0"
             type="line"
             :percentage="todayProgress"
             :show-indicator="false"
@@ -215,8 +215,8 @@ onMounted(loadData)
           <template #extra>
             <div class="empty-content">
               <n-icon :component="FolderOpenOutline" :size="40" color="#4b5563" />
-              <div class="empty-text">今日暂无任务</div>
-              <div class="empty-sub">去项目里看看，规划一下明天的学习</div>
+              <div class="empty-text">暂无待办任务</div>
+              <div class="empty-sub">去项目里创建你的第一个任务吧</div>
               <n-button type="primary" size="small" @click="goToProjects" style="margin-top: 12px;">
                 查看项目
               </n-button>
