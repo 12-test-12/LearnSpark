@@ -556,14 +556,19 @@ class StatsRepository {
   /** 获取用户活动热力图数据（最近 N 天的打卡情况） */
   async getActivityHeatmap(days: number = 90): Promise<{ date: string; count: number }[]> {
     const db = await getDatabase()
+    // tasks 表本身没有 user_id 字段，离线模式下所有任务都属于本地用户
+    // 通过 project_id 关联 projects 表来限定本地用户的数据
     const result = await db.query(
-      `SELECT date(completed_at) as date, COUNT(*) as count
-       FROM tasks
-       WHERE user_id IS NULL AND completed_at IS NOT NULL
-         AND date(completed_at) >= date('now', ?)
-       GROUP BY date(completed_at)
+      `SELECT date(t.completed_at) as date, COUNT(*) as count
+       FROM tasks t
+       INNER JOIN projects p ON t.project_id = p.id
+       WHERE p.user_id = ?
+         AND t.completed_at IS NOT NULL
+         AND t.deleted_at IS NULL
+         AND date(t.completed_at) >= date('now', ?)
+       GROUP BY date(t.completed_at)
        ORDER BY date ASC`,
-      [`-${days} days`]
+      [LOCAL_USER_ID, `-${days} days`]
     )
     return (result.values ?? []) as { date: string; count: number }[]
   }

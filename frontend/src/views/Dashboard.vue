@@ -17,21 +17,30 @@ import StreakCalendar from '@/components/StreakCalendar.vue'
 
 const router = useRouter()
 const loading = ref(true)
+const errorMsg = ref<string>('')
 const dashboard = ref<DashboardData | null>(null)
 const activities = ref<DailyActivity[]>([])
 
 async function loadData() {
   loading.value = true
-  try {
-    const [data, activity] = await Promise.all([
-      getDashboard(),
-      getActivityHeatmap()
-    ])
+  errorMsg.value = ''
+  // 两个数据源独立加载，避免一个失败拖垮整个仪表盘
+  const dashboardP = getDashboard().then(data => {
     dashboard.value = data
-    activities.value = activity
-  } finally {
-    loading.value = false
-  }
+  }).catch(err => {
+    console.error('[Dashboard] 加载仪表盘数据失败:', err)
+    errorMsg.value = err?.message || '数据加载失败'
+  })
+
+  const activityP = getActivityHeatmap().then(data => {
+    activities.value = data
+  }).catch(err => {
+    // 热力图失败不阻塞主流程，只打日志
+    console.error('[Dashboard] 加载活动热力图失败:', err)
+  })
+
+  await Promise.allSettled([dashboardP, activityP])
+  loading.value = false
 }
 
 /** 今日任务进度（0-100，用于线形进度条） */
@@ -90,6 +99,16 @@ onMounted(loadData)
     <!-- 加载中 -->
     <div v-if="loading" class="loading-wrapper">
       <n-spin size="large" />
+    </div>
+
+    <!-- 加载失败（且没有可用数据） -->
+    <div v-else-if="!dashboard && errorMsg" class="error-wrapper">
+      <n-icon :component="FolderOpenOutline" :size="48" color="#6b7280" />
+      <div class="error-text">数据加载失败</div>
+      <div class="error-detail">{{ errorMsg }}</div>
+      <n-button type="primary" size="small" @click="loadData" style="margin-top: 12px;">
+        重试
+      </n-button>
     </div>
 
     <template v-else-if="dashboard">
@@ -283,6 +302,30 @@ onMounted(loadData)
   justify-content: center;
   align-items: center;
   min-height: 60vh;
+}
+
+.error-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  padding: 24px;
+  text-align: center;
+
+  .error-text {
+    font-size: 15px;
+    color: #d1d5db;
+    margin-top: 16px;
+  }
+
+  .error-detail {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 6px;
+    word-break: break-all;
+    max-width: 90%;
+  }
 }
 
 /* ========== 1. 每日一句 Banner ========== */
@@ -645,7 +688,8 @@ onMounted(loadData)
 /* ========== 移动端适配（核心改动）========== */
 @media (max-width: 720px) {
   .dashboard-page {
-    padding: 0 0 80px 0;
+    // 移动端使用抽屉式导航，无底部 tab bar，只需少量底部留白
+    padding: 0 0 24px 0;
   }
 
   .quote-banner {
@@ -687,7 +731,14 @@ onMounted(loadData)
     height: 32px;
   }
 
-  .stat-label { font-size: 11px; }
+  .stat-label {
+    font-size: 11px;
+    // 防止 "今日待完成" 等中文 label 在窄屏换行
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
   .stat-value {
     font-size: 20px;
     .unit { font-size: 12px; }
@@ -698,7 +749,11 @@ onMounted(loadData)
     margin-bottom: 12px;
   }
 
-  .section-header { margin-bottom: 12px; }
+  .section-header {
+    margin-bottom: 12px;
+    // 标题与进度条紧贴，避免换行后留白
+    gap: 8px;
+  }
 
   .section-title { font-size: 14px; }
 
@@ -713,7 +768,15 @@ onMounted(loadData)
     gap: 8px;
   }
 
-  .task-title { font-size: 13px; }
+  // 移动端允许任务标题换行，避免长标题被过度截断
+  .task-title {
+    font-size: 13px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .task-desc { font-size: 11px; }
 
   // 关键：移动端任务按钮的"开始"文字隐藏，只显示图标
@@ -735,5 +798,8 @@ onMounted(loadData)
   .stat-icon { width: 28px; height: 28px; }
   .stat-value { font-size: 18px; }
   .stat-label { font-size: 10px; }
+
+  // 超小屏 quote-banner 装饰引号缩小，避免视觉干扰
+  .quote-banner .quote-mark { font-size: 72px; }
 }
 </style>
