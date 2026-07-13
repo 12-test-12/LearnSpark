@@ -9,7 +9,9 @@
     "build:android": "vite build --mode capacitor",
     "preview": "vite preview",
     "cap:sync": "cap sync android",
-    "cap:open:android": "cap open android"
+    "cap:open:android": "cap open android",
+    "android:dev": "npm run build:android && cap sync android",
+    "android:run": "npm run android:dev && cap run android"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^6.0.2",

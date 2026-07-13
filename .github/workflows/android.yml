@@ -96,14 +96,33 @@ jobs:
           npx cap sync android
           # 关键诊断：检查 capacitor.settings.gradle 是否生成
           # 该文件由 cap sync 在检测到第三方 Capacitor 插件时生成
-          SETTINGS_FILE="android/app/capacitor.settings.gradle"
+          # ⚠ 路径在 android/ 根目录，不是 android/app/
+          SETTINGS_FILE="android/capacitor.settings.gradle"
           if [ -f "$SETTINGS_FILE" ]; then
             echo "✓ $SETTINGS_FILE 已生成（项目含 Capacitor 插件）"
             echo "  ----- 文件内容 -----"
             cat "$SETTINGS_FILE" | sed 's/^/    /'
           else
             echo "ℹ $SETTINGS_FILE 未生成（项目无第三方 Capacitor 插件，这是正常的）"
-            echo "  app/build.gradle 模板已用 file.exists() 保护，构建不会因此失败"
+          fi
+
+          # 额外诊断：检查 app/capacitor.build.gradle（这个文件决定插件依赖是否生效）
+          BUILD_FILE="android/app/capacitor.build.gradle"
+          if [ -f "$BUILD_FILE" ]; then
+            echo ""
+            echo "✓ $BUILD_FILE 已生成（app 模块的插件依赖配置）"
+            cat "$BUILD_FILE" | sed 's/^/    /'
+          else
+            echo ""
+            echo "⚠ $BUILD_FILE 未生成（无第三方插件，但 app/build.gradle 模板会用 file.exists() 保护）"
+          fi
+
+          # 关键验证：capacitor.plugins.json 必须列出插件
+          PLUGINS_FILE="android/app/src/main/assets/capacitor.plugins.json"
+          if [ -f "$PLUGINS_FILE" ]; then
+            echo ""
+            echo "✓ $PLUGINS_FILE 存在，Capacitor 插件清单："
+            cat "$PLUGINS_FILE" | sed 's/^/    /'
           fi
 
       # ---------- 签名注入 ----------
