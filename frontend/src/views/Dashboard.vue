@@ -2,11 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  NIcon, NSpin, NEmpty, NTag, NButton, NProgress
+  NIcon, NSpin, NEmpty, NTag, NButton, NProgress, NCard
 } from 'naive-ui'
 import {
   CalendarOutline, FlameOutline, RibbonOutline,
-  BookOutline, SparklesOutline, ArrowForwardOutline, PlayCircleOutline
+  BookOutline, SparklesOutline, ArrowForwardOutline, PlayCircleOutline,
+  AddOutline, FolderOpenOutline
 } from '@vicons/ionicons5'
 import {
   getDashboard, getActivityHeatmap,
@@ -38,29 +39,47 @@ const todayProgress = computed(() => {
   if (!dashboard.value) return 0
   const total = dashboard.value.todayTasks.length
   if (total === 0) return 100
-  const done = dashboard.value.todayTasks.filter(t => t.status === 'PASSED').length
+  const done = dashboard.value.todayTasks.filter(t => t.status === 'passed' || t.status === 'PASSED').length
   return Math.round((done / total) * 100)
 })
 
 /** 今日完成数（用于 "0/3" 展示） */
 const todayDoneCount = computed(() => {
   if (!dashboard.value) return 0
-  return dashboard.value.todayTasks.filter(t => t.status === 'PASSED').length
+  return dashboard.value.todayTasks.filter(t => t.status === 'passed' || t.status === 'PASSED').length
 })
 
-/** 状态标签映射 */
+/** 是否需要空数据引导（数据库是空的） */
+const isFirstTime = computed(() => {
+  if (!dashboard.value) return false
+  return dashboard.value.totalPoints === 0
+    && dashboard.value.knowledgeCount === 0
+    && dashboard.value.todayTasks.length === 0
+    && dashboard.value.maxStreakDays === 0
+})
+
+/** 状态标签映射（兼容 passed / PASSED 两种大小写） */
 function statusInfo(status: string): { label: string; type: 'default' | 'success' | 'warning' | 'info' | 'error' } {
+  const normalized = (status || '').toUpperCase()
   const map: Record<string, { label: string; type: 'default' | 'success' | 'warning' | 'info' | 'error' }> = {
     PASSED:    { label: '已完成', type: 'success' },
     SUBMITTED: { label: '审核中', type: 'warning' },
     PENDING:   { label: '未开始', type: 'default' },
     REJECTED:  { label: '未通过', type: 'error' },
   }
-  return map[status] ?? { label: status, type: 'default' }
+  return map[normalized] ?? { label: status || '未知', type: 'default' }
 }
 
 function goToSubmit(taskId: string) {
   router.push({ name: 'task-submit', params: { taskId } })
+}
+
+function goToProjects() {
+  router.push({ name: 'projects' })
+}
+
+function goToCreateProject() {
+  router.push({ name: 'projects' })
 }
 
 onMounted(loadData)
@@ -69,32 +88,53 @@ onMounted(loadData)
 <template>
   <div class="dashboard-page">
     <!-- 加载中 -->
-    <n-spin v-if="loading" size="large" class="loading" />
+    <div v-if="loading" class="loading-wrapper">
+      <n-spin size="large" />
+    </div>
 
     <template v-else-if="dashboard">
-      <!-- 1. 每日一句 · 通栏 Banner（先放顶部，气场） -->
+      <!-- 1. 每日一句 · 通栏 Banner -->
       <div class="quote-banner">
         <div class="quote-mark">"</div>
         <div class="quote-text">{{ dashboard.dailyQuote }}</div>
         <div class="quote-sub">— LearnSpark · 每日灵感</div>
       </div>
 
-      <!-- 2. 顶部三栏统计卡片 -->
+      <!-- 2. 首次使用引导（空数据库时显示） -->
+      <div v-if="isFirstTime" class="onboarding-card">
+        <div class="onboarding-icon">
+          <n-icon :component="SparklesOutline" :size="32" color="#18a058" />
+        </div>
+        <div class="onboarding-content">
+          <div class="onboarding-title">开启你的学习之旅</div>
+          <div class="onboarding-desc">先创建一个学习项目，可以手动添加任务或让 AI 帮你生成学习计划</div>
+        </div>
+        <n-button type="primary" size="medium" @click="goToCreateProject">
+          <template #icon>
+            <n-icon :component="AddOutline" />
+          </template>
+          创建项目
+        </n-button>
+      </div>
+
+      <!-- 3. 顶部三栏统计卡片 -->
       <div class="stat-cards">
-        <div class="stat-card">
-          <div class="stat-icon stat-icon-green">
-            <n-icon :component="CalendarOutline" :size="24" />
+        <div class="stat-card stat-card-green">
+          <div class="stat-icon">
+            <n-icon :component="CalendarOutline" :size="22" />
           </div>
           <div class="stat-body">
             <div class="stat-label">今日待完成</div>
-            <div class="stat-value">{{ dashboard.todayPendingCount }}</div>
+            <div class="stat-value">
+              <span class="num">{{ dashboard.todayPendingCount }}</span>
+              <span class="unit">项</span>
+            </div>
           </div>
-          <div class="stat-accent stat-accent-green"></div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-icon stat-icon-orange">
-            <n-icon :component="FlameOutline" :size="24" />
+        <div class="stat-card stat-card-orange">
+          <div class="stat-icon">
+            <n-icon :component="FlameOutline" :size="22" />
           </div>
           <div class="stat-body">
             <div class="stat-label">连续打卡</div>
@@ -102,132 +142,129 @@ onMounted(loadData)
               <span class="num">{{ dashboard.maxStreakDays }}</span>
               <span class="unit">天</span>
             </div>
-            <div v-if="dashboard.maxStreakDays === 0" class="stat-hint">开启你的第一天！</div>
+            <div v-if="dashboard.maxStreakDays === 0" class="stat-hint">开启第一天</div>
           </div>
-          <div class="stat-accent stat-accent-orange"></div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-icon stat-icon-amber">
-            <n-icon :component="RibbonOutline" :size="24" />
+        <div class="stat-card stat-card-amber">
+          <div class="stat-icon">
+            <n-icon :component="RibbonOutline" :size="22" />
           </div>
           <div class="stat-body">
             <div class="stat-label">总积分</div>
-            <div class="stat-value">{{ dashboard.totalPoints }}</div>
+            <div class="stat-value">
+              <span class="num">{{ dashboard.totalPoints }}</span>
+            </div>
           </div>
-          <div class="stat-accent stat-accent-amber"></div>
         </div>
       </div>
 
-      <!-- 3. 主体：左侧热力图+任务，右侧弱化的知识库+小贴士 -->
-      <div class="dashboard-grid">
-        <div class="dashboard-main">
-          <!-- 学习日历热力图 -->
-          <div class="section-card">
-            <div class="section-header">
-              <div class="section-title">
-                <n-icon :component="CalendarOutline" :size="18" color="#18a058" />
-                <span>学习日历</span>
-                <span class="section-sub">近 90 天</span>
-              </div>
-              <span class="section-meta">悬停查看详情</span>
-            </div>
-            <StreakCalendar :activities="activities" />
+      <!-- 4. 主体：今日任务（置顶，移动端用户最关心的） -->
+      <div class="section-card section-card-priority">
+        <div class="section-header">
+          <div class="section-title">
+            <n-icon :component="ArrowForwardOutline" :size="18" color="#18a058" />
+            <span>今日任务</span>
+            <n-tag
+              v-if="dashboard.todayTasks.length > 0"
+              size="tiny"
+              round
+              :bordered="false"
+              type="success"
+            >
+              {{ todayDoneCount }} / {{ dashboard.todayTasks.length }}
+            </n-tag>
           </div>
+          <n-progress
+            v-if="dashboard.todayTasks.length > 0"
+            type="line"
+            :percentage="todayProgress"
+            :show-indicator="false"
+            :height="4"
+            color="#18a058"
+            rail-color="rgba(255,255,255,0.06)"
+            class="section-progress"
+          />
+        </div>
 
-          <!-- 今日任务 -->
-          <div class="section-card">
-            <div class="section-header">
-              <div class="section-title">
-                <n-icon :component="ArrowForwardOutline" :size="18" color="#18a058" />
-                <span>今日任务</span>
+        <n-empty
+          v-if="dashboard.todayTasks.length === 0"
+          :show-icon="false"
+          size="small"
+          class="task-empty"
+        >
+          <template #extra>
+            <div class="empty-content">
+              <n-icon :component="FolderOpenOutline" :size="40" color="#4b5563" />
+              <div class="empty-text">今日暂无任务</div>
+              <div class="empty-sub">去项目里看看，规划一下明天的学习</div>
+              <n-button type="primary" size="small" @click="goToProjects" style="margin-top: 12px;">
+                查看项目
+              </n-button>
+            </div>
+          </template>
+        </n-empty>
+
+        <div v-else class="task-list">
+          <div
+            v-for="task in dashboard.todayTasks"
+            :key="task.id"
+            class="task-item"
+            @click="goToSubmit(task.id)"
+          >
+            <div class="task-info">
+              <div class="task-line">
+                <span class="task-title">{{ task.title || '未命名任务' }}</span>
                 <n-tag
-                  v-if="dashboard.todayTasks.length > 0"
                   size="tiny"
                   round
                   :bordered="false"
-                  type="success"
+                  :type="statusInfo(task.status).type"
                 >
-                  {{ todayDoneCount }} / {{ dashboard.todayTasks.length }}
+                  {{ statusInfo(task.status).label }}
                 </n-tag>
               </div>
-              <n-progress
-                v-if="dashboard.todayTasks.length > 0"
-                type="line"
-                :percentage="todayProgress"
-                :show-indicator="false"
-                :height="6"
-                color="#18a058"
-                rail-color="rgba(255,255,255,0.06)"
-                style="width: 120px"
-              />
+              <div class="task-desc">{{ task.description || '暂无描述' }}</div>
             </div>
-
-            <n-empty
-              v-if="dashboard.todayTasks.length === 0"
-              description="今日暂无待完成任务，继续保持！"
+            <n-button
+              v-if="task.status === 'pending' || task.status === 'PENDING' || task.status === 'failed' || task.status === 'REJECTED'"
+              type="primary"
               size="small"
-              class="task-empty"
-            />
-            <div v-else class="task-list">
-              <div
-                v-for="task in dashboard.todayTasks"
-                :key="task.id"
-                class="task-item"
-                @click="goToSubmit(task.id)"
-              >
-                <div class="task-info">
-                  <div class="task-line">
-                    <span class="task-title">{{ task.title || '未命名任务' }}</span>
-                    <n-tag
-                      size="tiny"
-                      round
-                      :bordered="false"
-                      :type="statusInfo(task.status).type"
-                    >
-                      {{ statusInfo(task.status).label }}
-                    </n-tag>
-                  </div>
-                  <div class="task-desc">{{ task.description || '暂无描述' }}</div>
-                </div>
-                <n-button
-                  v-if="task.status === 'PENDING' || task.status === 'REJECTED'"
-                  type="primary"
-                  size="small"
-                  @click.stop="goToSubmit(task.id)"
-                >
-                  <template #icon>
-                    <n-icon :component="PlayCircleOutline" />
-                  </template>
-                  开始学习
-                </n-button>
-                <n-icon v-else :component="ArrowForwardOutline" :size="18" class="task-arrow" />
-              </div>
-            </div>
+              @click.stop="goToSubmit(task.id)"
+              class="task-action-btn"
+            >
+              <template #icon>
+                <n-icon :component="PlayCircleOutline" />
+              </template>
+              <span class="btn-text">开始</span>
+            </n-button>
+            <n-icon v-else :component="ArrowForwardOutline" :size="18" class="task-arrow" />
           </div>
         </div>
+      </div>
 
-        <!-- 右侧：弱化存在感，改为信息流 -->
-        <div class="dashboard-aside">
-          <div class="aside-card">
-            <div class="aside-header">
-              <n-icon :component="BookOutline" :size="16" color="#18a058" />
-              <span>知识库</span>
-            </div>
-            <div class="kb-mini">
-              <div class="kb-num">{{ dashboard.knowledgeCount }}</div>
-              <div class="kb-label">条已沉淀知识</div>
-              <n-button text type="primary" size="small" @click="router.push({ name: 'knowledge' })">
-                去查看 →
-              </n-button>
-            </div>
-          </div>
-
-          <div class="aside-tip">
-            <n-icon :component="SparklesOutline" :size="14" />
-            <span>小贴士：每日坚持提交任务可累计连续打卡天数</span>
+      <!-- 5. 主体：学习日历热力图 -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <n-icon :component="CalendarOutline" :size="18" color="#18a058" />
+            <span>学习日历</span>
+            <span class="section-sub">近 90 天</span>
           </div>
         </div>
+        <StreakCalendar :activities="activities" />
+      </div>
+
+      <!-- 6. 知识库快捷入口（移到底部，单行紧凑布局） -->
+      <div class="kb-card" @click="router.push({ name: 'knowledge' })">
+        <div class="kb-icon">
+          <n-icon :component="BookOutline" :size="20" color="#18a058" />
+        </div>
+        <div class="kb-text">
+          <div class="kb-num">{{ dashboard.knowledgeCount }} <span class="kb-unit">条</span></div>
+          <div class="kb-label">已沉淀知识</div>
+        </div>
+        <n-icon :component="ArrowForwardOutline" :size="18" class="kb-arrow" />
       </div>
     </template>
   </div>
@@ -238,20 +275,21 @@ onMounted(loadData)
 .dashboard-page {
   max-width: 1080px;
   margin: 0 auto;
-  padding-bottom: 40px;
+  padding: 0 0 80px 0;  // 底部留出移动端导航栏的高度
 }
 
-.loading {
+.loading-wrapper {
   display: flex;
   justify-content: center;
-  padding: 100px 0;
+  align-items: center;
+  min-height: 60vh;
 }
 
-/* ========== 1. 每日一句 · Banner ========== */
+/* ========== 1. 每日一句 Banner ========== */
 .quote-banner {
   position: relative;
-  margin-bottom: 20px;
-  padding: 24px 32px 22px;
+  margin-bottom: 16px;
+  padding: 20px 24px 18px;
   background: linear-gradient(135deg, #1a1a1a 0%, #161616 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
@@ -262,7 +300,7 @@ onMounted(loadData)
     top: -10px;
     left: 16px;
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 120px;
+    font-size: 100px;
     line-height: 1;
     color: rgba(24, 160, 88, 0.12);
     pointer-events: none;
@@ -271,42 +309,79 @@ onMounted(loadData)
   .quote-text {
     position: relative;
     font-family: Georgia, 'Times New Roman', 'Source Han Serif SC', serif;
-    font-size: 18px;
-    line-height: 1.7;
+    font-size: 16px;
+    line-height: 1.6;
     color: #e5e7eb;
     font-style: italic;
     padding-left: 8px;
   }
 
   .quote-sub {
-    margin-top: 10px;
+    margin-top: 8px;
     font-size: 12px;
     color: #6b7280;
     letter-spacing: 1px;
   }
 }
 
-/* ========== 2. 顶部统计卡片 ========== */
+/* ========== 2. 首次使用引导 ========== */
+.onboarding-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(24, 160, 88, 0.08), rgba(24, 160, 88, 0.02));
+  border: 1px solid rgba(24, 160, 88, 0.25);
+  border-radius: 12px;
+}
+
+.onboarding-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 160, 88, 0.14);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.onboarding-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f3f4f6;
+  margin-bottom: 4px;
+}
+
+.onboarding-desc {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+/* ========== 3. 顶部统计卡片 ========== */
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-@media (max-width: 720px) {
-  .stat-cards { grid-template-columns: 1fr; }
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .stat-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 22px 24px;
+  gap: 12px;
+  padding: 16px 18px;
   background: #1e1e1e;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 10px;
   transition: transform 0.2s, border-color 0.2s;
 
   &:hover {
@@ -316,27 +391,18 @@ onMounted(loadData)
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   flex-shrink: 0;
-
-  &.stat-icon-green {
-    background: rgba(24, 160, 88, 0.14);
-    color: #36d57f;
-  }
-  &.stat-icon-orange {
-    background: rgba(240, 160, 32, 0.14);
-    color: #f0a020;
-  }
-  &.stat-icon-amber {
-    background: rgba(245, 158, 11, 0.14);
-    color: #f59e0b;
-  }
 }
+
+.stat-card-green .stat-icon { background: rgba(24, 160, 88, 0.14); color: #36d57f; }
+.stat-card-orange .stat-icon { background: rgba(240, 160, 32, 0.14); color: #f0a020; }
+.stat-card-amber .stat-icon { background: rgba(245, 158, 11, 0.14); color: #f59e0b; }
 
 .stat-body { flex: 1; min-width: 0; }
 
@@ -349,7 +415,7 @@ onMounted(loadData)
 
 .stat-value {
   font-family: 'JetBrains Mono', 'Roboto Mono', 'SF Mono', Consolas, monospace;
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.1;
   color: #f3f4f6;
@@ -358,7 +424,7 @@ onMounted(loadData)
   gap: 4px;
 
   .unit {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 400;
     color: #9ca3af;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -372,48 +438,26 @@ onMounted(loadData)
   font-style: italic;
 }
 
-/* 卡片左侧色条 */
-.stat-accent {
-  position: absolute;
-  left: 0;
-  top: 18%;
-  bottom: 18%;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-
-  &.stat-accent-green  { background: #18a058; }
-  &.stat-accent-orange { background: #f0a020; }
-  &.stat-accent-amber  { background: #f59e0b; }
-}
-
-/* ========== 3. 主体网格 ========== */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-
-@media (min-width: 900px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr 280px;
-  }
-}
-
-/* ========== 通用 section 卡片 ========== */
+/* ========== 4. 通用 section 卡片 ========== */
 .section-card {
   background: #1e1e1e;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 22px 24px;
-  margin-bottom: 16px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+
+.section-card-priority {
+  border-color: rgba(24, 160, 88, 0.2);
 }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .section-title {
@@ -432,48 +476,75 @@ onMounted(loadData)
   margin-left: 4px;
 }
 
-.section-meta {
-  font-size: 11px;
-  color: #6b7280;
+.section-progress {
+  flex: 1;
+  max-width: 140px;
+  min-width: 80px;
 }
 
 /* ========== 今日任务 ========== */
 .task-empty {
-  padding: 32px 0;
+  padding: 16px 0 8px;
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.empty-text {
+  font-size: 14px;
+  color: #d1d5db;
+  margin-top: 12px;
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
 }
 
 .task-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .task-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s, transform 0.15s;
 
+  &:active {
+    transform: scale(0.98);
+  }
+
   &:hover {
     background: rgba(24, 160, 88, 0.05);
     border-color: rgba(24, 160, 88, 0.3);
-    transform: translateX(2px);
   }
 }
 
-.task-info { flex: 1; min-width: 0; }
+.task-info {
+  flex: 1;
+  min-width: 0;
+}
 
 .task-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
 }
 
 .task-title {
@@ -483,79 +554,186 @@ onMounted(loadData)
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 60%;
+  max-width: 100%;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .task-desc {
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: #6b7280;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-height: 2.4em;
+  word-break: break-word;
 }
 
-.task-arrow { color: #6b7280; transition: color 0.2s, transform 0.2s; }
+.task-action-btn {
+  flex-shrink: 0;
+}
+
+.task-arrow {
+  color: #6b7280;
+  transition: color 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
 .task-item:hover .task-arrow { color: #36d57f; transform: translateX(2px); }
 
-/* ========== 右侧栏（弱化） ========== */
-.dashboard-aside {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.aside-card {
-  background: #1e1e1e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 18px 20px;
-}
-
-.aside-header {
+/* ========== 5. 知识库快捷入口 ========== */
+.kb-card {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #d1d5db;
-  margin-bottom: 14px;
+  gap: 14px;
+  padding: 14px 18px;
+  background: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+
+  &:hover {
+    background: rgba(24, 160, 88, 0.05);
+    border-color: rgba(24, 160, 88, 0.3);
+  }
 }
 
-.kb-mini {
+.kb-icon {
+  width: 38px;
+  height: 38px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 160, 88, 0.14);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.kb-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .kb-num {
   font-family: 'JetBrains Mono', 'Roboto Mono', 'SF Mono', Consolas, monospace;
-  font-size: 36px;
+  font-size: 18px;
   font-weight: 700;
-  color: #36d57f;
-  line-height: 1;
+  color: #f3f4f6;
+  line-height: 1.2;
+
+  .kb-unit {
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
 }
 
 .kb-label {
   font-size: 12px;
   color: #9ca3af;
-  margin-bottom: 4px;
+  margin-top: 2px;
 }
 
-.aside-tip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  background: rgba(24, 160, 88, 0.06);
-  border-left: 2px solid #18a058;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #9ca3af;
+.kb-arrow {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+/* ========== 移动端适配（核心改动）========== */
+@media (max-width: 720px) {
+  .dashboard-page {
+    padding: 0 0 80px 0;
+  }
+
+  .quote-banner {
+    padding: 16px 18px 14px;
+    margin-bottom: 12px;
+
+    .quote-text { font-size: 14px; }
+  }
+
+  .onboarding-card {
+    padding: 14px 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+
+    .onboarding-icon {
+      width: 38px;
+      height: 38px;
+    }
+    .onboarding-title { font-size: 14px; }
+    .onboarding-desc { font-size: 11px; }
+  }
+
+  // 关键：移动端 3 卡片仍然横排，但更紧凑
+  .stat-cards {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .stat-card {
+    padding: 12px 10px;
+    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .stat-label { font-size: 11px; }
+  .stat-value {
+    font-size: 20px;
+    .unit { font-size: 12px; }
+  }
+
+  .section-card {
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+
+  .section-header { margin-bottom: 12px; }
+
+  .section-title { font-size: 14px; }
+
+  // 进度条移到下一行
+  .section-progress {
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+
+  .task-item {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .task-title { font-size: 13px; }
+  .task-desc { font-size: 11px; }
+
+  // 关键：移动端任务按钮的"开始"文字隐藏，只显示图标
+  .task-action-btn :deep(.btn-text) {
+    display: none;
+  }
+
+  .kb-card {
+    padding: 12px 14px;
+  }
+
+  .kb-num { font-size: 16px; }
+}
+
+/* 超小屏（iPhone SE 等 320px 设备）*/
+@media (max-width: 380px) {
+  .stat-cards { gap: 6px; }
+  .stat-card { padding: 10px 8px; }
+  .stat-icon { width: 28px; height: 28px; }
+  .stat-value { font-size: 18px; }
+  .stat-label { font-size: 10px; }
 }
 </style>

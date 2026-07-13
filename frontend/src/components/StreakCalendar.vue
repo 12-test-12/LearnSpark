@@ -135,6 +135,7 @@ function hideTooltip() {
             ]"
             @mouseenter="showTooltip($event, day)"
             @mouseleave="hideTooltip"
+            @touchstart.prevent="showTooltip($event, day)"
           ></div>
         </div>
       </div>
@@ -319,5 +320,45 @@ function hideTooltip() {
 .tooltip-fade-enter-from,
 .tooltip-fade-leave-to {
   opacity: 0;
+}
+
+/* ========== 移动端适配 ========== */
+@media (max-width: 720px) {
+  .calendar-cell {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+
+  .calendar-grid {
+    gap: 3px;
+  }
+
+  .calendar-week {
+    gap: 3px;
+  }
+
+  .weekday-labels span {
+    height: 14px;
+    line-height: 14px;
+    font-size: 10px;
+  }
+
+  .calendar-legend .calendar-cell {
+    width: 10px;
+    height: 10px;
+  }
+
+  .cell-tooltip {
+    .tooltip-count { font-size: 14px; }
+  }
+}
+
+/* 超小屏：进一步压缩 */
+@media (max-width: 380px) {
+  .calendar-cell {
+    width: 11px;
+    height: 11px;
+  }
 }
 </style>
