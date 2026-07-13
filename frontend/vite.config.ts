@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -27,10 +27,6 @@ import { fileURLToPath, URL } from 'node:url'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // 加载 .env 文件
-  // Capacitor 模式加载 .env.capacitor（可选）
-  const env = loadEnv(mode, process.cwd(), '')
-
   // 是否在 Capacitor 模式下构建
   // 通过 `vite build --mode capacitor` 触发
   // 同时兼容直接设置环境变量
@@ -107,16 +103,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5173,
-      // 开发环境代理 /api 到后端
-      // VITE_BACKEND_URL 是后端服务地址（如 http://localhost:8080）
-      // 注意：不能用 VITE_API_BASE_URL（那是 API 路径前缀 /api/v1，不是有效 URL）
-      proxy: {
-        '/api': {
-          target: env.VITE_BACKEND_URL || 'http://localhost:8080',
-          changeOrigin: true
-        }
-      }
+      port: 5173
     },
     build: {
       target: 'es2020',
