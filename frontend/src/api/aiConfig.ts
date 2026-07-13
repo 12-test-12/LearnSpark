@@ -1,6 +1,9 @@
-import { request } from './request'
+/**
+ * AI 配置 API（离线版）— 接口签名不变，底层改为 SQLite
+ * API Key 直接明文存本地（离线单用户，无需加密）
+ */
+import { aiConfigRepo } from '@/db/repositories'
 
-/** AI 配置响应（Key 已脱敏） */
 export interface AiConfigResponse {
   deepseekApiKey: string
   hasDeepseekKey: boolean
@@ -13,7 +16,6 @@ export interface AiConfigResponse {
   embeddingModel: string
 }
 
-/** AI 配置更新请求（Key 为空时保留已有值；localMode=true 时清空 Key） */
 export interface AiConfigRequest {
   deepseekApiKey?: string
   searchApiKey?: string
@@ -24,31 +26,60 @@ export interface AiConfigRequest {
   embeddingModel?: string
 }
 
-/** 配置测试请求 */
 export interface AiConfigTestRequest {
   provider: 'deepseek' | 'search'
   apiKey?: string
   baseUrl?: string
 }
 
-/** 配置测试响应 */
 export interface AiConfigTestResponse {
   success: boolean
   message: string
   latencyMs: number
 }
 
-/** 获取当前用户 AI 配置 */
-export function getAiConfig(): Promise<AiConfigResponse> {
-  return request.get<AiConfigResponse>('/user/ai-config')
+export async function getAiConfig(): Promise<AiConfigResponse> {
+  const config = await aiConfigRepo.getConfig()
+  return {
+    deepseekApiKey: config?.deepseek_api_key ?? '',
+    hasDeepseekKey: !!config?.deepseek_api_key,
+    searchApiKey: config?.search_api_key ?? '',
+    hasSearchKey: !!config?.search_api_key,
+    deepseekBaseUrl: config?.deepseek_base_url ?? 'https://api.deepseek.com/v1',
+    deepseekModel: config?.deepseek_model ?? 'deepseek-chat',
+    searchProvider: config?.search_provider ?? 'bing',
+    localMode: !!config?.local_mode,
+    embeddingModel: config?.embedding_model ?? 'bge-large-zh',
+  }
 }
 
-/** 更新当前用户 AI 配置 */
-export function saveAiConfig(data: AiConfigRequest): Promise<AiConfigResponse> {
-  return request.put<AiConfigResponse>('/user/ai-config', data)
+export async function saveAiConfig(data: AiConfigRequest): Promise<AiConfigResponse> {
+  await aiConfigRepo.saveConfig({
+    apiKey: data.deepseekApiKey,
+    baseUrl: data.deepseekBaseUrl,
+    model: data.deepseekModel,
+    searchApiKey: data.searchApiKey,
+    searchProvider: data.searchProvider,
+  })
+  return getAiConfig()
 }
 
-/** 测试 AI 配置连通性 */
-export function testAiConfig(data: AiConfigTestRequest): Promise<AiConfigTestResponse> {
-  return request.post<AiConfigTestResponse>('/user/ai-config/test', data)
+/** 测试 AI 配置连通性（前端直调 DeepSeek API） */
+export async function testAiConfig(data: AiConfigTestRequest): Promise<AiConfigTestResponse> {
+  const start = Date.now()
+  try {
+    if (data.provider === 'deepseek') {
+      const baseUrl = data.baseUrl || 'https://api.deepseek.com/v1'
+      const resp = await fetch(`${baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${data.apiKey}` },
+      })
+      if (resp.ok) {
+        return { success: true, message: '连接成功', latencyMs: Date.now() - start }
+      }
+      return { success: false, message: `HTTP ${resp.status}`, latencyMs: Date.now() - start }
+    }
+    return { success: true, message: '搜索 API 测试跳过（离线模式）', latencyMs: 0 }
+  } catch (e) {
+    return { success: false, message: (e as Error).message, latencyMs: Date.now() - start }
+  }
 }

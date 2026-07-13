@@ -12,6 +12,7 @@
     "cap:open:android": "cap open android"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^6.0.2",
     "@capacitor/android": "^6.1.2",
     "@capacitor/core": "^6.1.2",
     "@types/canvas-confetti": "^1.9.0",

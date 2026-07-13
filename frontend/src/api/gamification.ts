@@ -1,6 +1,8 @@
-import { request } from './request'
+/**
+ * 徽章 API（离线版）— 接口签名不变，底层改为 SQLite
+ */
+import { gamificationRepo } from '@/db/repositories'
 
-/** 徽章展示项（含是否已解锁） */
 export interface BadgeItem {
   id: string
   code: string
@@ -14,7 +16,21 @@ export interface BadgeItem {
   awardedAt: string | null
 }
 
-/** 查询当前用户全部徽章（含已解锁/未解锁） */
-export function getBadges(): Promise<BadgeItem[]> {
-  return request.get<BadgeItem[]>('/user/badges')
+export async function getBadges(): Promise<BadgeItem[]> {
+  const allBadges = await gamificationRepo.listBadges()
+  const userBadges = await gamificationRepo.listUserBadges()
+  const awardedMap = new Map(userBadges.map(b => [b.id, b.awarded_at]))
+
+  return allBadges.map(b => ({
+    id: b.id,
+    code: b.code,
+    name: b.name,
+    description: b.description,
+    iconUrl: b.icon_url,
+    category: b.category,
+    ruleType: b.rule_type,
+    ruleValue: b.rule_value,
+    awarded: awardedMap.has(b.id),
+    awardedAt: awardedMap.get(b.id) ?? null,
+  }))
 }

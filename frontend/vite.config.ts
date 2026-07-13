@@ -109,9 +109,11 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 5173,
       // 开发环境代理 /api 到后端
+      // VITE_BACKEND_URL 是后端服务地址（如 http://localhost:8080）
+      // 注意：不能用 VITE_API_BASE_URL（那是 API 路径前缀 /api/v1，不是有效 URL）
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8080',
+          target: env.VITE_BACKEND_URL || 'http://localhost:8080',
           changeOrigin: true
         }
       }

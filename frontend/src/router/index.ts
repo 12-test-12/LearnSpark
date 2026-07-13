@@ -90,21 +90,30 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 })
 })
 
-// 全局前置守卫：登录态校验
+// 全局前置守卫：离线模式自动登录
 router.beforeEach((to, _from, next) => {
   const appTitle = import.meta.env.VITE_APP_TITLE || 'LearnSpark'
   document.title = to.meta.title ? `${to.meta.title} · ${appTitle}` : appTitle
 
   const userStore = useUserStore()
-  const requiresAuth = to.meta.requiresAuth !== false
 
-  if (requiresAuth && !userStore.isLoggedIn()) {
-    next({ name: 'login', query: { redirect: to.fullPath } })
-  } else if ((to.name === 'login' || to.name === 'register') && userStore.isLoggedIn()) {
-    next({ name: 'dashboard' })
-  } else {
-    next()
+  // 离线模式：如果未登录，自动设置本地用户
+  if (!userStore.isLoggedIn()) {
+    userStore.setAuth('offline-mode', {
+      id: 'local-user',
+      email: 'local@learnspark.app',
+      nickname: '我',
+      avatarUrl: '',
+    })
   }
+
+  // 离线模式：访问 login/register 时直接跳到 dashboard
+  if (to.name === 'login' || to.name === 'register') {
+    next({ name: 'dashboard' })
+    return
+  }
+
+  next()
 })
 
 export default router

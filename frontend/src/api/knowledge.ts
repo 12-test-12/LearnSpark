@@ -1,6 +1,8 @@
-import { request } from './request'
+/**
+ * 知识库 API（离线版）— 接口签名不变，底层改为 SQLite
+ */
+import { knowledgeRepo, rowToEntity, type KnowledgeEntryRow } from '@/db/repositories'
 
-/** 知识条目列表项（不含正文） */
 export interface KnowledgeEntryListItem {
   id: string
   title: string
@@ -13,7 +15,6 @@ export interface KnowledgeEntryListItem {
   updatedAt: string
 }
 
-/** 知识条目详情（含正文） */
 export interface KnowledgeEntryDetail {
   id: string
   title: string
@@ -30,7 +31,6 @@ export interface KnowledgeEntryDetail {
   updatedAt: string
 }
 
-/** 搜索结果项（含高亮摘要） */
 export interface SearchResultItem {
   id: string
   title: string
@@ -42,7 +42,6 @@ export interface SearchResultItem {
   createdAt: string
 }
 
-/** 分页结果 */
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -51,7 +50,6 @@ export interface PageResult<T> {
   totalPages: number
 }
 
-/** 上传响应 */
 export interface UploadResponse {
   entryId: string
   title: string
@@ -63,40 +61,86 @@ export interface UploadResponse {
   createdAt: string
 }
 
-/** 列出所有知识条目 */
-export function listKnowledge(): Promise<KnowledgeEntryListItem[]> {
-  return request.get<KnowledgeEntryListItem[]>('/knowledge')
+function parseTags(tags: unknown): string[] | null {
+  if (!tags || typeof tags !== 'string') return null
+  try { return JSON.parse(tags) } catch { return null }
 }
 
-/** 获取知识条目详情 */
-export function getKnowledge(id: string): Promise<KnowledgeEntryDetail> {
-  return request.get<KnowledgeEntryDetail>(`/knowledge/${id}`)
+function rowToListItem(row: KnowledgeEntryRow): KnowledgeEntryListItem {
+  return rowToEntity<KnowledgeEntryListItem>(row)
 }
 
-/** 全文检索 */
-export function searchKnowledge(
+function rowToDetail(row: KnowledgeEntryRow): KnowledgeEntryDetail {
+  const detail = rowToEntity<KnowledgeEntryDetail>(row)
+  detail.tags = parseTags(row.tags)
+  return detail
+}
+
+export async function listKnowledge(): Promise<KnowledgeEntryListItem[]> {
+  const rows = await knowledgeRepo.listAll()
+  return rows.map(rowToListItem)
+}
+
+export async function getKnowledge(id: string): Promise<KnowledgeEntryDetail> {
+  const row = await knowledgeRepo.findById(id)
+  if (!row) throw new Error('知识条目不存在')
+  return rowToDetail(row)
+}
+
+export async function searchKnowledge(
   q: string,
   page = 0,
   size = 10
 ): Promise<PageResult<SearchResultItem>> {
-  return request.get<PageResult<SearchResultItem>>('/knowledge/search', {
-    params: { q, page, size }
+  const rows = await knowledgeRepo.search(q)
+  const start = page * size
+  const list: SearchResultItem[] = rows.slice(start, start + size).map(row => ({
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    highlightedSummary: row.summary ?? row.title,
+    sourceType: row.source_type,
+    tags: parseTags(row.tags),
+    wordCount: row.word_count,
+    createdAt: row.created_at ?? '',
+  }))
+  return {
+    list,
+    total: rows.length,
+    page,
+    size,
+    totalPages: Math.ceil(rows.length / size),
+  }
+}
+
+export async function deleteKnowledge(id: string): Promise<void> {
+  await knowledgeRepo.softDelete(id)
+}
+
+/** 离线版：上传文件直接读文本内容存本地 */
+export async function uploadKnowledge(file: File): Promise<UploadResponse> {
+  const text = await file.text()
+  const row = await knowledgeRepo.createEntry({
+    title: file.name,
+    content: text,
+    contentMd: text,
+    sourceType: 'upload',
+    summary: text.substring(0, 200),
+    tags: [],
+    mimeType: file.type,
   })
+  return {
+    entryId: row.id,
+    title: row.title,
+    filePath: row.file_path ?? '',
+    sourceType: row.source_type ?? 'upload',
+    wordCount: row.word_count,
+    tags: [],
+    links: [],
+    createdAt: row.created_at ?? '',
+  }
 }
 
-/** 软删除知识条目 */
-export function deleteKnowledge(id: string): Promise<void> {
-  return request.delete<void>(`/knowledge/${id}`)
-}
-
-/** 上传文件到知识库（multipart） */
-export function uploadKnowledge(file: File): Promise<UploadResponse> {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request.post<UploadResponse>('/knowledge/upload', formData)
-}
-
-/** 双向链接项 */
 export interface KnowledgeLinkItem {
   entryId: string | null
   title: string
@@ -104,13 +148,12 @@ export interface KnowledgeLinkItem {
   exists: boolean
 }
 
-/** 双向链接响应（出链 + 反链） */
 export interface KnowledgeLinksResponse {
   outgoing: KnowledgeLinkItem[]
   incoming: KnowledgeLinkItem[]
 }
 
-/** 查询知识条目的双向链接 */
-export function getKnowledgeLinks(id: string): Promise<KnowledgeLinksResponse> {
-  return request.get<KnowledgeLinksResponse>(`/knowledge/${id}/links`)
+export async function getKnowledgeLinks(id: string): Promise<KnowledgeLinksResponse> {
+  // 离线版暂不支持双向链接（可后续扩展）
+  return { outgoing: [], incoming: [] }
 }

@@ -1,8 +1,17 @@
-import { request } from './request'
+/**
+ * ============================================================
+ *  项目 / 阶段 / 任务 API（离线版）
+ *
+ *  改造前：调用后端 REST API
+ *  改造后：调用本地 SQLite Repository
+ *  接口签名完全不变，组件代码无需修改
+ * ============================================================
+ */
 
-// ============ 类型定义 ============
+import { projectRepo, phaseRepo, taskRepo, rowToEntity, type ProjectRow, type PhaseRow, type TaskRow } from '@/db/repositories'
 
-/** 项目 */
+// ============ 类型定义（保持不变）============
+
 export interface Project {
   id: string
   name: string
@@ -16,7 +25,6 @@ export interface Project {
   updatedAt: string
 }
 
-/** 项目创建/更新请求 */
 export interface ProjectRequest {
   name: string
   description?: string
@@ -25,7 +33,6 @@ export interface ProjectRequest {
   coverColor?: string
 }
 
-/** 阶段 */
 export interface Phase {
   id: string
   projectId: string
@@ -36,7 +43,6 @@ export interface Phase {
   updatedAt: string
 }
 
-/** 阶段创建/更新请求 */
 export interface PhaseRequest {
   projectId: string
   name: string
@@ -44,7 +50,6 @@ export interface PhaseRequest {
   sortOrder?: number
 }
 
-/** 任务 */
 export interface Task {
   id: string
   phaseId: string | null
@@ -63,7 +68,6 @@ export interface Task {
 
 export type TaskStatus = 'pending' | 'submitted' | 'passed' | 'failed'
 
-/** 任务创建/更新请求 */
 export interface TaskRequest {
   projectId: string
   phaseId?: string | null
@@ -75,64 +79,113 @@ export interface TaskRequest {
   sortOrder?: number
 }
 
+// ============ 转换函数：数据库行 → 前端对象 ============
+
+function rowToProject(row: ProjectRow): Project {
+  return rowToEntity<Project>(row)
+}
+
+function rowToPhase(row: PhaseRow): Phase {
+  return rowToEntity<Phase>(row)
+}
+
+function rowToTask(row: TaskRow): Task {
+  return rowToEntity<Task>(row)
+}
+
 // ============ 项目 API ============
 
-export function listProjects(): Promise<Project[]> {
-  return request.get<Project[]>('/projects')
+export async function listProjects(): Promise<Project[]> {
+  const rows = await projectRepo.listActive()
+  return rows.map(rowToProject)
 }
 
-export function getProject(id: string): Promise<Project> {
-  return request.get<Project>(`/projects/${id}`)
+export async function getProject(id: string): Promise<Project> {
+  const row = await projectRepo.findById(id)
+  if (!row) throw new Error('项目不存在')
+  return rowToProject(row)
 }
 
-export function createProject(data: ProjectRequest): Promise<Project> {
-  return request.post<Project>('/projects', data)
+export async function createProject(data: ProjectRequest): Promise<Project> {
+  const row = await projectRepo.createProject(data)
+  return rowToProject(row)
 }
 
-export function updateProject(id: string, data: ProjectRequest): Promise<Project> {
-  return request.put<Project>(`/projects/${id}`, data)
+export async function updateProject(id: string, data: ProjectRequest): Promise<Project> {
+  await projectRepo.updateProject(id, data)
+  const row = await projectRepo.findById(id)
+  if (!row) throw new Error('项目不存在')
+  return rowToProject(row)
 }
 
-export function deleteProject(id: string): Promise<void> {
-  return request.delete<void>(`/projects/${id}`)
+export async function deleteProject(id: string): Promise<void> {
+  await projectRepo.softDeleteProject(id)
 }
 
 // ============ 阶段 API ============
 
-export function listPhases(projectId: string): Promise<Phase[]> {
-  return request.get<Phase[]>(`/projects/${projectId}/phases`)
+export async function listPhases(projectId: string): Promise<Phase[]> {
+  const rows = await phaseRepo.listByProject(projectId)
+  return rows.map(rowToPhase)
 }
 
-export function createPhase(data: PhaseRequest): Promise<Phase> {
-  return request.post<Phase>('/phases', data)
+export async function createPhase(data: PhaseRequest): Promise<Phase> {
+  const row = await phaseRepo.createPhase(data)
+  return rowToPhase(row)
 }
 
-export function updatePhase(id: string, data: PhaseRequest): Promise<Phase> {
-  return request.put<Phase>(`/phases/${id}`, data)
+export async function updatePhase(id: string, data: PhaseRequest): Promise<Phase> {
+  const updateData: Record<string, unknown> = {
+    project_id: data.projectId,
+    name: data.name,
+    objective: data.objective ?? null,
+    sort_order: data.sortOrder ?? 0,
+  }
+  await phaseRepo.update(id, updateData as Partial<PhaseRow>)
+  const row = await phaseRepo.findById(id)
+  if (!row) throw new Error('阶段不存在')
+  return rowToPhase(row)
 }
 
-export function deletePhase(id: string): Promise<void> {
-  return request.delete<void>(`/phases/${id}`)
+export async function deletePhase(id: string): Promise<void> {
+  await phaseRepo.delete(id)
 }
 
 // ============ 任务 API ============
 
-export function listTasks(projectId: string, date?: string): Promise<Task[]> {
-  return request.get<Task[]>(`/projects/${projectId}/tasks`, { params: date ? { date } : undefined })
+export async function listTasks(projectId: string, date?: string): Promise<Task[]> {
+  const rows = await taskRepo.listByProject(projectId, date)
+  return rows.map(rowToTask)
 }
 
-export function getTask(id: string): Promise<Task> {
-  return request.get<Task>(`/tasks/${id}`)
+export async function getTask(id: string): Promise<Task> {
+  const row = await taskRepo.findById(id)
+  if (!row) throw new Error('任务不存在')
+  return rowToTask(row)
 }
 
-export function createTask(data: TaskRequest): Promise<Task> {
-  return request.post<Task>('/tasks', data)
+export async function createTask(data: TaskRequest): Promise<Task> {
+  const row = await taskRepo.createTask(data)
+  return rowToTask(row)
 }
 
-export function updateTask(id: string, data: TaskRequest): Promise<Task> {
-  return request.put<Task>(`/tasks/${id}`, data)
+export async function updateTask(id: string, data: TaskRequest): Promise<Task> {
+  const updateData: Record<string, unknown> = {
+    project_id: data.projectId,
+    phase_id: data.phaseId ?? null,
+    day_number: data.dayNumber ?? null,
+    title: data.title ?? null,
+    description: data.description,
+    verification_criteria: data.verificationCriteria ?? null,
+    due_date: data.dueDate ?? null,
+    sort_order: data.sortOrder ?? 0,
+  }
+  await taskRepo.update(id, updateData as Partial<TaskRow>)
+  const row = await taskRepo.findById(id)
+  if (!row) throw new Error('任务不存在')
+  return rowToTask(row)
 }
 
-export function deleteTask(id: string): Promise<void> {
-  return request.delete<void>(`/tasks/${id}`)
+export async function deleteTask(id: string): Promise<void> {
+  await taskRepo.softDelete(id)
 }
