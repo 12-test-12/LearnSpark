@@ -322,4 +322,4 @@ export async function initializeSchema(db: SQLiteDBConnection): Promise<void> {
   }
 }
 
-export type { DBSQLiteValues }
+export type { WebDBConnection }

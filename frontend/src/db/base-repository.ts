@@ -31,7 +31,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
   /**
    * 获取数据库连接
    */
-  protected async db(): Promise<SQLiteDBConnection> {
+  protected async db(): Promise<WebDBConnection> {
     return getDatabase()
   }
 
