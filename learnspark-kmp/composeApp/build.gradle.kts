@@ -159,20 +159,24 @@ compose.desktop {
         mainClass = "com.learnspark.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Exe, TargetFormat.Dmg, TargetFormat.Deb)
-            packageName = "LearnSpark"
-            packageVersion = "1.0.0"
+        targetFormats(TargetFormat.Exe, TargetFormat.Dmg, TargetFormat.Deb)
+        packageName = "LearnSpark"
+        packageVersion = "1.0.0"
 
-            windows {
-                menuGroup = "LearnSpark"
-                upgradeUuid = "8a7b3c2d-1e4f-4a5b-9c8d-7e6f5a4b3c2d"
-            }
-            macOS {
-                bundleID = "com.learnspark"
-            }
-            linux {
-                packageName = "learnspark"
-            }
+        // 阶段 R1：显式声明需要的 JDK 模块，避免 JPackage 静态裁剪后找不到
+        // java.sql.*（被 SQLDelight JDBC driver 反射加载）
+        modules("jdk.crypto.ec", "java.sql", "java.naming", "java.management")
+
+        windows {
+            menuGroup = "LearnSpark"
+            upgradeUuid = "8a7b3c2d-1e4f-4a5b-9c8d-7e6f5a4b3c2d"
         }
+        macOS {
+            bundleID = "com.learnspark"
+        }
+        linux {
+            packageName = "learnspark"
+        }
+    }
     }
 }
