@@ -1,0 +1,92 @@
+{
+  "exportedAt": "2026-07-01T12:00:00.000Z",
+  "version": 1,
+  "data": {
+    "projects": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "user_id": "00000000-0000-0000-0000-000000000001",
+        "name": "30 天学会 Kotlin",
+        "description": "从语法到协程到 KMP 全流程",
+        "goal": "能独立开发 KMP 桌面端应用",
+        "cover_color": "#4A90E2",
+        "daily_hours": 2,
+        "is_ai_generated": 1,
+        "status": "active",
+        "created_at": "2026-06-15T00:00:00.000Z",
+        "updated_at": "2026-07-01T00:00:00.000Z"
+      }
+    ],
+    "phases": [
+      {
+        "id": "22222222-2222-2222-2222-222222222221",
+        "project_id": "11111111-1111-1111-1111-111111111111",
+        "name": "基础语法",
+        "description": "变量、函数、类",
+        "sort_order": 0,
+        "start_date": "2026-06-15",
+        "end_date": "2026-06-25",
+        "status": "completed"
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "project_id": "11111111-1111-1111-1111-111111111111",
+        "name": "协程 + 异步",
+        "description": "suspend / Flow / Channel",
+        "sort_order": 1,
+        "start_date": "2026-06-26",
+        "end_date": "2026-07-05",
+        "status": "active"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "33333333-3333-3333-3333-333333333331",
+        "phase_id": "22222222-2222-2222-2222-222222222221",
+        "title": "阅读 Kotlin 官方文档第 1-3 章",
+        "description": "了解基本类型和控制流",
+        "sort_order": 0,
+        "estimated_hours": 3,
+        "actual_hours": 2,
+        "status": "done",
+        "due_date": "2026-06-17"
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333332",
+        "phase_id": "22222222-2222-2222-2222-222222222222",
+        "title": "理解 suspend 函数",
+        "description": "协程基础",
+        "sort_order": 0,
+        "estimated_hours": 2,
+        "actual_hours": 0,
+        "status": "in_progress",
+        "due_date": "2026-06-28"
+      }
+    ],
+    "submissions": [
+      {
+        "id": "44444444-4444-4444-4444-444444444441",
+        "task_id": "33333333-3333-3333-3333-333333333331",
+        "user_id": "00000000-0000-0000-0000-000000000001",
+        "content_md": "# 学习总结\n\n完成了 Kotlin 基础语法的学习，包括：\n- 变量声明\n- 函数定义\n- 类与继承\n",
+        "ai_score": 85,
+        "ai_feedback": "学习笔记结构清晰",
+        "ai_highlights": "能正确使用 data class",
+        "reviewed_at": "2026-06-18T10:00:00.000Z"
+      }
+    ],
+    "knowledge_entries": [
+      {
+        "id": "55555555-5555-5555-5555-555555555551",
+        "user_id": "00000000-0000-0000-0000-000000000001",
+        "title": "Kotlin 协程笔记",
+        "content": "# 协程\n\n协程是 Kotlin 处理异步的现代方式。\n\n- suspend 关键字\n- CoroutineScope\n- Dispatchers",
+        "source_type": "MANUAL",
+        "source_path": null,
+        "file_size": null,
+        "file_type": null,
+        "tags": "kotlin,协程"
+      }
+    ]
+  }
+}

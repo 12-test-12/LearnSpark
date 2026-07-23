@@ -1,0 +1,28 @@
+-- R3b：提醒触发日志（仅作 UI 缓存，主要在服务端）
+CREATE TABLE ReminderLog (
+    id TEXT NOT NULL PRIMARY KEY,
+    userId TEXT NOT NULL,
+    settingId TEXT NOT NULL,
+    firedAt TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT,
+    targetId TEXT,
+    acknowledged INTEGER NOT NULL DEFAULT 0
+);
+
+selectAllReminderLogs:
+SELECT * FROM ReminderLog ORDER BY firedAt DESC;
+
+selectPendingReminderLogs:
+SELECT * FROM ReminderLog WHERE acknowledged = 0 ORDER BY firedAt DESC;
+
+upsertReminderLog:
+INSERT OR REPLACE INTO ReminderLog(
+    id, userId, settingId, firedAt, title, message, targetId, acknowledged
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+acknowledgeReminderLog:
+UPDATE ReminderLog SET acknowledged = 1 WHERE id = :id;
+
+acknowledgeAllReminderLogs:
+UPDATE ReminderLog SET acknowledged = 1 WHERE acknowledged = 0;

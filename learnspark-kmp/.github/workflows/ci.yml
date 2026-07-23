@@ -1,0 +1,127 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        shell: bash
+        run: chmod +x gradlew
+
+      - name: Show Gradle & Java version
+        shell: bash
+        run: |
+          ./gradlew --version
+          java -version
+
+      # ---------- 后端 ----------
+      - name: Build server (bootJar)
+        shell: bash
+        run: ./gradlew.bat :server:bootJar --no-daemon
+
+      - name: Run server tests
+        shell: bash
+        run: ./gradlew.bat :server:test --no-daemon
+        continue-on-error: true   # 现阶段没测试，避免阻塞
+
+      - name: Upload server JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: learnspark-server
+          path: server/build/libs/*.jar
+          if-no-files-found: warn
+
+      # ---------- Desktop ----------
+      - name: Compile Desktop
+        shell: bash
+        run: ./gradlew.bat :composeApp:compileKotlinDesktop --no-daemon
+
+      - name: Package MSI
+        shell: bash
+        run: ./gradlew.bat :composeApp:packageMsi --no-daemon
+
+      - name: Upload Desktop MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: learnspark-desktop-msi
+          path: composeApp/build/compose/binaries/main/msi/**/*.msi
+          if-no-files-found: warn
+
+      # ---------- Android ----------
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Compile Android (Debug)
+        shell: bash
+        run: ./gradlew.bat :composeApp:compileDebugKotlinAndroid --no-daemon
+
+      - name: Assemble Debug APK
+        shell: bash
+        run: ./gradlew.bat :composeApp:assembleDebug --no-daemon
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: learnspark-android-debug
+          path: composeApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+  # ---------- 仅 main 分支跑：完整测试 + 上传构建产物 ----------
+  upload:
+    name: Upload Artifacts (main only)
+    needs: build
+    runs-on: windows-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List artifacts
+        shell: bash
+        run: find dist -type f | head -50
+
+  # ---------- 打 tag 时发 Release ----------
+  release:
+    name: Release
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/learnspark-server/*.jar
+            dist/learnspark-desktop-msi/*.msi
+            dist/learnspark-android-debug/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false

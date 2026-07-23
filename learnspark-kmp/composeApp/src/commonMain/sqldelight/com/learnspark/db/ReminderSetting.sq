@@ -1,0 +1,41 @@
+-- R3b：提醒设置（拉远端为准，本地做 cache）
+CREATE TABLE ReminderSetting (
+    id TEXT NOT NULL PRIMARY KEY,
+    userId TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'CUSTOM',
+    title TEXT NOT NULL,
+    message TEXT,
+    targetId TEXT,
+    triggerTime TEXT NOT NULL DEFAULT '09:00:00',
+    repeatPattern TEXT NOT NULL DEFAULT 'DAILY',
+    weekdayMask INTEGER NOT NULL DEFAULT 127,
+    nextFireAt TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    serverVersion INTEGER NOT NULL DEFAULT 1,
+    localVersion INTEGER NOT NULL DEFAULT 1,
+    isDirty INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT,
+    updatedAt TEXT
+);
+
+selectAllReminderSettings:
+SELECT * FROM ReminderSetting ORDER BY triggerTime ASC;
+
+selectReminderSettingById:
+SELECT * FROM ReminderSetting WHERE id = :id;
+
+upsertReminderSetting:
+INSERT OR REPLACE INTO ReminderSetting(
+    id, userId, type, title, message, targetId, triggerTime, repeatPattern,
+    weekdayMask, nextFireAt, enabled, serverVersion, localVersion, isDirty,
+    createdAt, updatedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+markReminderSettingClean:
+UPDATE ReminderSetting SET isDirty = 0, serverVersion = localVersion, updatedAt = ? WHERE id = ?;
+
+markReminderSettingDirty:
+UPDATE ReminderSetting SET isDirty = 1, updatedAt = ? WHERE id = ?;
+
+deleteReminderSettingById:
+DELETE FROM ReminderSetting WHERE id = :id;

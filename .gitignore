@@ -1,62 +1,48 @@
-HELP.md
-target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+# ============================================================
+#  LearnSpark 根目录 .gitignore
+#  （阶段 4：废弃旧 Spring Boot + Vue3 项目，仅保留 KMP 重写）
+#  KMP 子项目自身有 .gitignore (learnspark-kmp/.gitignore)
+#  本文件仅控制根目录级别的规则
+# ============================================================
 
-### IntelliJ IDEA ###
-.idea
-*.iws
+### IDE / 编辑器 ###
+.idea/
 *.iml
+*.iws
 *.ipr
-
-### Eclipse ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
 .vscode/
+.DS_Store
+Thumbs.db
+
+### 本地配置（不提交）###
+local.properties
+*.local
 
 ### 日志 ###
 *.log
 logs/
 
-### 本地配置 ###
-application-local.yml
+### 临时文件 ###
+*.tmp
+*.bak
+*.swp
+*~
 
-### Capacitor / Android 构建产物 ###
-# Android 工程本身（不入仓，CI 通过 cap add 重新生成 + 模板覆盖）
-frontend/android/
+### Node / 包管理（前端历史残留，仅作兜底） ###
+node_modules/
 
-# Android Gradle
-frontend/android/.gradle/
-frontend/android/build/
-frontend/android/app/build/
-frontend/android/captures/
-frontend/android/local.properties
-frontend/android/.idea/
-frontend/android/app/release/
-frontend/android/.cxx/
-
-# Keystore（生产密钥，禁止入库）
+### Android / KMP 构建产物（兜底，子项目 .gitignore 已覆盖） ###
+*.apk
+*.aab
 *.keystore
 *.jks
-frontend/android/app/*.keystore
-
-# Gradle 用户级配置
 .gradle/
+build/
+
+### 密钥相关 ###
+keystore.properties
+keystore-base64.txt
+
+### Docker / 部署 ###
+# .env 由 .env.example 复制而来，本地配置不进库
+.env

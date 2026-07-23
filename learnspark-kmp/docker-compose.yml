@@ -1,0 +1,133 @@
+# 阶段 3.2：LearnSpark 后端双进程部署
+#
+# 启动：
+#   docker compose up -d mysql app-api app-worker
+#   docker compose logs -f app-worker
+#
+# 关闭：
+#   docker compose down
+#
+# 数据卷：
+#   mysql_data - MySQL 数据（持久化）
+#   uploads    - 文件上传目录（app-api 和 app-worker 共享）
+#   certs      - HTTPS 证书
+
+version: "3.9"
+
+services:
+  # MySQL 8.0
+  mysql:
+    image: mysql:8.0
+    container_name: learnspark-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-learnspark}
+      MYSQL_USER: ${MYSQL_USER:-learnspark}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-learnspark}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./deploy/mysql/conf:/etc/mysql/conf.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - learnspark-net
+
+  # app-api：REST API 服务（轻量，-Xmx512m）
+  app-api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: learnspark/server:1.0.0
+    container_name: learnspark-app-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: api
+      JAVA_OPTS: "-Xmx512m -Dfile.encoding=UTF-8"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-learnspark}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-learnspark}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-learnspark}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      LEARNSPARK_UPLOAD_DIR: /app/uploads
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - uploads:/app/uploads
+      - app_api_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - learnspark-net
+
+  # app-worker：文件解析进程（重型，-Xmx1024m；无 Web 容器）
+  app-worker:
+    image: learnspark/server:1.0.0
+    container_name: learnspark-app-worker
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      app-api:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: worker
+      JAVA_OPTS: "-Xmx1024m -Dfile.encoding=UTF-8"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-learnspark}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-learnspark}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-learnspark}
+      LEARNSPARK_UPLOAD_DIR: /app/uploads
+      # 解析参数
+      LEARNSPARK_PARSER_ENABLED: "true"
+      LEARNSPARK_PARSER_POLL_INTERVAL_MS: "5000"
+      LEARNSPARK_PARSER_BATCH_SIZE: "5"
+      LEARNSPARK_PARSER_MAX_RETRIES: "3"
+    volumes:
+      - uploads:/app/uploads
+      - app_worker_logs:/app/logs
+    networks:
+      - learnspark-net
+    # 不暴露端口（worker 无 Web 容器）
+
+  # Nginx 反向代理 + HTTPS 终止（生产环境启用）
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: learnspark-nginx
+    restart: unless-stopped
+    depends_on:
+      - app-api
+    ports:
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - learnspark-net
+
+volumes:
+  mysql_data:
+  uploads:
+  app_api_logs:
+  app_worker_logs:
+  nginx_logs:
+
+networks:
+  learnspark-net:
+    driver: bridge

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 暴露 cacheDir/files 给 FileProvider，让其他应用通过 content:// 打开 -->
+    <cache-path name="cache_files" path="files/" />
+    <!-- 导出目录（exportToDocuments） -->
+    <external-files-path name="external_exports" path="exports/" />
+</paths>

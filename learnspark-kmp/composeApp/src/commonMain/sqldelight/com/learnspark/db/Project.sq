@@ -1,0 +1,51 @@
+-- LearnSpark SQLDelight Schema
+-- 用于阶段 0.2 PoC：本地写一条记录  Pull 拉取  显示
+
+CREATE TABLE Project (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    goal TEXT,
+    dailyHours INTEGER NOT NULL DEFAULT 2,
+    isAiGenerated INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT "active",
+    coverColor TEXT NOT NULL DEFAULT "#18a058",
+    serverVersion INTEGER NOT NULL DEFAULT 0,
+    localVersion INTEGER NOT NULL DEFAULT 1,
+    isDirty INTEGER NOT NULL DEFAULT 1,
+    deletedAt TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+);
+
+-- 按状态查询
+selectActiveProjects:
+SELECT * FROM Project
+WHERE status = "active" AND deletedAt IS NULL
+ORDER BY updatedAt DESC;
+
+-- 按 ID 查询
+selectById:
+SELECT * FROM Project WHERE id = ?;
+
+-- 插入或更新（UPSERT）
+upsertProject:
+INSERT OR REPLACE INTO Project(
+    id, name, goal, dailyHours, isAiGenerated, status, coverColor,
+    serverVersion, localVersion, isDirty, deletedAt, createdAt, updatedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- 标记为脏数据（等待同步）
+markDirty:
+UPDATE Project SET isDirty = 1, updatedAt = ? WHERE id = ?;
+
+-- 标记为已同步（拉取后用）
+markClean:
+UPDATE Project SET isDirty = 0, serverVersion = localVersion, updatedAt = ? WHERE id = ?;
+
+-- 软删除
+softDelete:
+UPDATE Project SET deletedAt = ?, isDirty = 1, updatedAt = ? WHERE id = ?;
+
+-- 查询所有脏数据（用于同步推送）
+selectDirty:
+SELECT * FROM Project WHERE isDirty = 1;

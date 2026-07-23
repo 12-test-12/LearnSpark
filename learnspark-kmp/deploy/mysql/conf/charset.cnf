@@ -1,0 +1,16 @@
+# 阶段 3.2：MySQL 字符集配置
+# 独立配置目录，避免覆盖默认配置
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+init_connect = 'SET NAMES utf8mb4'
+
+# 阶段 3.2：FULLTEXT 索引优化（按文档 §2.4）
+# 中文 FULLTEXT 需要 ngram 分词器（MySQL 5.7+）
+# 在 V1 初始化脚本里已为 knowledge_entries 启用 ngram
+innodb_ft_min_token_size = 2
+ngram_token_size = 2

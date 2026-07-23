@@ -1,2 +1,0 @@
-Plain text notes about React.
-References: [[React Hooks Learning Notes]] and [[useState detail]].

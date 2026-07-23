@@ -1,0 +1,19 @@
+.gradle/
+build/
+.kotlin/
+.idea/
+*.iml
+.vscode/
+local.properties
+*.apk
+*.aab
+.cxx/
+.DS_Store
+Thumbs.db
+composeApp/compose-distributions/
+
+# 阶段 3.4：Android 签名密钥（绝不能提交）
+keystore.properties
+*.keystore
+*.jks
+keystore-base64.txt

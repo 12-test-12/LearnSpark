@@ -1,0 +1,23 @@
+# 阶段 2.1：app-worker 专属 profile
+# 与 api 共享同一镜像，启动时通过 --spring.profiles.active=worker 激活
+# 关键差异：禁用 Web 端口 + 不订阅 RabbitMQ 等，专注轮询任务
+learnspark:
+  parser:
+    enabled: true
+    poll-interval-ms: ${POLL_INTERVAL_MS:5000}
+    batch-size: ${BATCH_SIZE:3}
+
+spring:
+  main:
+    web-application-type: none              # 不启动 Web 容器
+    banner-mode: off
+  jpa:
+    show-sql: false
+
+management:
+  endpoints:
+    enabled-by-default: false
+
+logging:
+  level:
+    com.learnspark.server.worker: INFO
