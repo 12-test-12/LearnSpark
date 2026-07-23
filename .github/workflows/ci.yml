@@ -9,8 +9,9 @@ on:
   workflow_dispatch:        # 允许手动触发（即使 push 后也想再跑一次）
 
 jobs:
-  build:
-    name: Build Desktop + Android
+  # ---------- Job 1: Windows EXE ----------
+  build-windows:
+    name: Build Windows EXE
     runs-on: windows-latest
     timeout-minutes: 60
 
@@ -38,7 +39,6 @@ jobs:
         working-directory: learnspark-kmp
         run: chmod +x gradlew
 
-      # ---------- Desktop (EXE) ----------
       - name: Package Desktop (EXE)
         shell: bash
         working-directory: learnspark-kmp
@@ -77,28 +77,56 @@ jobs:
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0.exe
           if-no-files-found: error
 
-      # ---------- Android (APK) ----------
+  # ---------- Job 2: Android APK ----------
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Clear Gradle dependency cache (workaround for upstream 502)
+        run: |
+          rm -rf ~/.gradle/caches/modules-2/metadata-* 2>/dev/null || true
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/com.android.tools.build/manifest-merger 2>/dev/null || true
+          echo "Cache cleared"
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Assemble Debug APK
-        shell: bash
+      - name: Grant execute permission for gradlew
         working-directory: learnspark-kmp
-        run: ./gradlew.bat :composeApp:assembleDebug --no-daemon
+        run: chmod +x gradlew
+
+      - name: Assemble Debug APK
+        working-directory: learnspark-kmp
+        run: ./gradlew :composeApp:assembleDebug --no-daemon
 
       - name: Locate APK
-        shell: bash
         run: |
           find learnspark-kmp/composeApp/build/outputs/apk/debug -name "*.apk" -type f
+          ls -la learnspark-kmp/composeApp/build/outputs/apk/debug/ 2>/dev/null || true
 
       - name: Copy APK with version
-        shell: bash
         run: |
           cd learnspark-kmp/composeApp/build/outputs/apk/debug
           APK_FILE=$(find . -name "*.apk" -type f | head -1)
           if [ -n "$APK_FILE" ]; then
             cp "$APK_FILE" "LearnSpark-1.0.0.apk"
             ls -la "LearnSpark-1.0.0.apk"
+          else
+            echo "ERROR: No APK produced, listing outputs tree:"
+            ls -laR learnspark-kmp/composeApp/build/outputs/ 2>/dev/null || true
+            exit 1
           fi
 
       - name: Upload Android APK
@@ -108,7 +136,7 @@ jobs:
           path: learnspark-kmp/composeApp/build/outputs/apk/debug/LearnSpark-1.0.0.apk
           if-no-files-found: error
 
-  # ---------- Linux Desktop (DEB + tar.gz) ----------
+  # ---------- Job 3: Linux Desktop (DEB + tar.gz) ----------
   build-linux:
     name: Build Linux Desktop
     runs-on: ubuntu-latest
@@ -140,7 +168,18 @@ jobs:
         working-directory: learnspark-kmp
         run: chmod +x gradlew
 
-      # packageDeb 会触发 createDistributable，在 build/compose/binaries/main/app/<name>/ 生成可运行目录
+      # 先显式触发 createDistributable，确保 app/ 目录生成（packageDeb 也依赖它，但显式调用更可靠）
+      - name: Create distributable
+        working-directory: learnspark-kmp
+        run: ./gradlew :composeApp:createDistributable --no-daemon
+
+      - name: Verify app directory exists
+        run: |
+          echo "=== app/ directory ==="
+          ls -la learnspark-kmp/composeApp/build/compose/binaries/main/app/ 2>/dev/null || true
+          echo "=== full binaries tree (top 3 levels) ==="
+          find learnspark-kmp/composeApp/build/compose/binaries/main -maxdepth 3 -type d 2>/dev/null || true
+
       - name: Package Linux DEB
         working-directory: learnspark-kmp
         run: ./gradlew :composeApp:packageDeb --no-daemon
@@ -175,8 +214,9 @@ jobs:
             echo "Created tar.gz:"
             ls -la "LearnSpark-1.0.0-linux.tar.gz"
           else
-            echo "WARN: no app directory found, listing build tree:"
+            echo "ERROR: no app directory found, listing build tree:"
             ls -laR . | head -80
+            exit 1
           fi
 
       - name: Upload Linux DEB
@@ -191,12 +231,12 @@ jobs:
         with:
           name: learnspark-linux-tar
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0-linux.tar.gz
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # ---------- Release：仅在 push tag 时触发，自动发布到 GitHub Releases ----------
   release:
     name: Create GitHub Release
-    needs: [build, build-linux]
+    needs: [build-windows, build-android, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
