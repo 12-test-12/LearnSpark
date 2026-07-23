@@ -257,34 +257,36 @@ jobs:
         id: meta
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # push tag：用 tag 名，标记为正式版
+            # push tag v*：用 tag 名作为 release，标记为正式版（会显示在首页"Latest release"区）
             echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "release_name=LearnSpark ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "override=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
           else
-            # push master / 手动触发：固定 latest tag，每次自动覆盖同名 release
-            echo "tag_name=latest" >> "$GITHUB_OUTPUT"
-            echo "release_name=LearnSpark latest (build ${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+            # push master / 手动触发：把"latest"作为 release 名（不用 tag 概念，避免污染 tags 列表）
+            # GitHub 用 release 的 name 来识别 Latest，name="latest" 时会显示在首页"Latest release"区
+            echo "tag_name=__skip__" >> "$GITHUB_OUTPUT"
+            echo "release_name=latest" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "override=true" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Delete existing latest release
         if: steps.meta.outputs.override == 'true'
         continue-on-error: true
         run: |
-          # 删除已存在的 latest tag + release，便于 softprops 重建
-          git tag -d latest 2>/dev/null || true
+          # 删除已存在的 latest release，便于重建（不影响 tags 页）
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
 
-      - name: Create Release
+      - name: Create or update Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag_name }}
           name: ${{ steps.meta.outputs.release_name }}
           body: |
-            ## ${{ steps.meta.outputs.release_name }}
+            ## LearnSpark ${{ steps.meta.outputs.release_name }}
 
             构建自 commit `${{ github.sha }}`（${{ github.event_name }}，${{ github.ref }}）。
 
@@ -308,3 +310,5 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ steps.meta.outputs.prerelease }}
+          fail_on_unmatched_files: false
+          make_latest: ${{ steps.meta.outputs.make_latest }}
