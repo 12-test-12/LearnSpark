@@ -273,9 +273,10 @@ jobs:
             echo "override=false" >> "$GITHUB_OUTPUT"
             echo "make_latest=true" >> "$GITHUB_OUTPUT"
           else
-            # push master / 手动触发：把"latest"作为 release 名（不用 tag 概念，避免污染 tags 列表）
-            # GitHub 用 release 的 name 来识别 Latest，name="latest" 时会显示在首页"Latest release"区
-            echo "tag_name=__skip__" >> "$GITHUB_OUTPUT"
+            # push master / 手动触发：用 latest Tag 滚动发布
+            # GitHub Release 必须基于一个 Git Tag，用 latest Tag 每次强制更新指向最新 commit
+            # 这样 Release 源码、资产、关联 commit 始终一致
+            echo "tag_name=latest" >> "$GITHUB_OUTPUT"
             echo "release_name=latest" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "override=true" >> "$GITHUB_OUTPUT"
@@ -285,8 +286,11 @@ jobs:
       - name: Delete existing latest release
         if: steps.meta.outputs.override == 'true'
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 删除已存在的 latest release，便于重建（不影响 tags 页）
+          # 删除已存在的 latest Release 及其背后的 Git Tag
+          # --cleanup-tag 会同时删除 tag，下次 action-gh-release 会重新创建并指向当前 commit
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
 
       - name: Create or update Release
