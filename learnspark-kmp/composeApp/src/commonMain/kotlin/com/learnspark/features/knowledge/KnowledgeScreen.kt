@@ -59,6 +59,9 @@ import com.learnspark.data.model.KnowledgeEntryDto
 import com.learnspark.data.model.KnowledgeFolderDto
 import com.learnspark.features.viewer.FileViewerScreen
 import com.learnspark.features.viewer.FileViewerViewModel
+import com.learnspark.shared.components.EmptyState
+import com.learnspark.shared.components.ErrorBanner
+import com.learnspark.shared.components.UserFacingError
 import org.koin.compose.koinInject
 
 /**
@@ -91,14 +94,14 @@ object KnowledgeScreen : Screen {
                     title = {
                         Column {
                             Text(
-                                if (selectedFolder == null) "知识库" else "📁 ${selectedFolder!!.name}",
+                                if (selectedFolder == null) "知识库" else selectedFolder!!.name,
                                 style = MaterialTheme.typography.h6,
                             )
                             Text(
                                 if (selectedFolder == null) {
-                                    "${folders.size} 文件夹 · ${entries.size} 条目"
+                                    "${folders.size} 个文件夹 · ${entries.size} 个文件"
                                 } else {
-                                    "父：${selectedFolder!!.path}"
+                                    "本文件夹内文件"
                                 },
                                 style = MaterialTheme.typography.caption,
                             )
@@ -123,16 +126,11 @@ object KnowledgeScreen : Screen {
                         Text("同步中…", style = MaterialTheme.typography.caption)
                     }
                 }
-                ui.error?.let { msg ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), backgroundColor = MaterialTheme.colors.error) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(msg, color = MaterialTheme.colors.onError, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { vm.dismissError() }) { Text("关闭") }
-                        }
-                    }
+                ui.error?.let { _ ->
+                    ErrorBanner(
+                        error = UserFacingError.Network(onRetry = { vm.refresh() }),
+                        onDismiss = { vm.dismissError() },
+                    )
                 }
 
                 // 面包屑导航
@@ -149,24 +147,12 @@ object KnowledgeScreen : Screen {
                     val unfiled = entries.filter { it.folderId == null }
 
                     if (rootFolders.isEmpty() && unfiled.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    Icons.Default.FolderOpen,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colors.primary,
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text("暂无内容", style = MaterialTheme.typography.body1)
-                                Spacer(Modifier.height(8.dp))
-                                Button(onClick = { showCreate = true }) { Text("+ 新建文件夹") }
-                                Spacer(Modifier.height(16.dp))
-                                Button(onClick = { showOrganize = true }) {
-                                    Text("🤖 AI 一键整理")
-                                }
-                            }
-                        }
+                        EmptyState(
+                            title = "还没有任何文件",
+                            description = "把学习资料上传到这里集中管理。试试让 AI 帮你整理归类，或者新建一个文件夹开始。",
+                            primaryAction = "AI 一键整理" to { showOrganize = true },
+                            secondaryAction = "新建文件夹" to { showCreate = true },
+                        )
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (rootFolders.isNotEmpty()) {

@@ -21,7 +21,7 @@ object AuthScreen : Screen {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("登录", style = MaterialTheme.typography.h5)
-            Text("阶段 1.2 + 1.1.6 接入双令牌认证", style = MaterialTheme.typography.caption)
+            Text("登录后跨设备同步你的学习进度", style = MaterialTheme.typography.caption)
         }
     }
 }

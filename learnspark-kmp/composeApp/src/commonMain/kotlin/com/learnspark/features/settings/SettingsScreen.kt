@@ -42,14 +42,16 @@ object SettingsScreen : Screen {
     override fun Content() {
         val viewModel: MigrationViewModel = koinInject()
         val state by viewModel.state.collectAsState()
-        val navigator = LocalNavigator.currentOrThrow
+        // R7 修复：使用 runCatching 安全获取 navigator，避免在 Tab 切换或异常路径下
+        // 抛出 NoSuchElementException 导致整个 app 闪退。
+        val navigator = runCatching { LocalNavigator.currentOrThrow }.getOrNull()
 
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("设置", style = MaterialTheme.typography.h5)
-            Text("阶段 1.1.6 接入主题切换 + 设备管理", style = MaterialTheme.typography.caption)
+            Text("主题、AI、通知、同步都在这里", style = MaterialTheme.typography.caption)
 
             // 阶段 R3b：通知管理
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -64,10 +66,10 @@ object SettingsScreen : Screen {
                         style = MaterialTheme.typography.caption,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { navigator.push(ReminderScreen) }) {
+                        Button(onClick = { navigator?.push(ReminderScreen) }) {
                             Text("⏰ 自定义通知时间")
                         }
-                        Button(onClick = { navigator.push(NotificationCenterScreen) }) {
+                        Button(onClick = { navigator?.push(NotificationCenterScreen) }) {
                             Text("📬 通知中心")
                         }
                     }
@@ -88,7 +90,7 @@ object SettingsScreen : Screen {
                             "在任务详情页可选择本次使用的 provider。",
                         style = MaterialTheme.typography.caption,
                     )
-                    Button(onClick = { navigator.push(AiConfigScreen) }) {
+                    Button(onClick = { navigator?.push(AiConfigScreen) }) {
                         Text("🤖 配置 AI 服务")
                     }
                 }

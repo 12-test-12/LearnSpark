@@ -24,6 +24,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.TextButton
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
@@ -34,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import com.learnspark.data.model.ReminderLogDto
 import org.koin.compose.koinInject
 
@@ -52,6 +55,8 @@ object NotificationCenterScreen : Screen {
         val vm: ReminderViewModel = koinInject()
         val pending by vm.pendingLogs.collectAsState()
         val ui by vm.ui.collectAsState()
+        // R7 修复：用 runCatching 包一层；返回按钮用 navigator?.pop()
+        val navigator = runCatching { LocalNavigator.currentOrThrow }.getOrNull()
 
         Scaffold(
             topBar = {
@@ -64,6 +69,11 @@ object NotificationCenterScreen : Screen {
                                 else "未连接",
                                 style = MaterialTheme.typography.caption,
                             )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator?.pop() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                         }
                     },
                     actions = {

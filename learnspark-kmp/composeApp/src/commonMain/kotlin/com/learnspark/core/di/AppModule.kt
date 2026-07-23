@@ -22,6 +22,7 @@ import com.learnspark.features.settings.AiConfigScreen
 import com.learnspark.features.settings.AiConfigViewModel
 import com.learnspark.features.tasks.TaskDetailViewModel
 import com.learnspark.features.viewer.FileViewerViewModel
+import com.learnspark.shared.components.DashboardViewModel
 import com.russhwolf.settings.Settings
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -85,6 +86,9 @@ val coreModule: Module = module {
     single { FileCache() }
     // 阶段 R5d：文件查看器 ViewModel
     single { FileViewerViewModel(get(), get()) }
+
+    // 阶段 R6a：仪表盘聚合 ViewModel
+    single { DashboardViewModel(get(), get()) }
 }
 
 /**

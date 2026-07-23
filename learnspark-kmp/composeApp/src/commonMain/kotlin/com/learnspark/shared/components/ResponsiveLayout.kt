@@ -22,6 +22,8 @@ import androidx.compose.material.icons.outlined.Book
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import cafe.adriel.voyager.navigator.CurrentScreen
+import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.CurrentTab
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 
@@ -73,6 +75,7 @@ private fun DesktopLayout() {
             Box(
                 modifier = Modifier.fillMaxSize().padding(start = 8.dp),
             ) {
+                // R7 修复：每个 Tab 内部包一个 Navigator（与 BottomNavBar 一致）
                 CurrentTab()
             }
         }

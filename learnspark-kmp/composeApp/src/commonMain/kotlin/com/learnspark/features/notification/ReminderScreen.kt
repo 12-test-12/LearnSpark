@@ -29,6 +29,7 @@ import androidx.compose.material.TextButton
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -41,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import com.learnspark.data.model.ReminderSettingDto
 import org.koin.compose.koinInject
 
@@ -60,11 +63,17 @@ object ReminderScreen : Screen {
         val settings by vm.settings.collectAsState()
         val ui by vm.ui.collectAsState()
         var showCreate by remember { mutableStateOf(false) }
+        val navigator = runCatching { LocalNavigator.currentOrThrow }.getOrNull()
 
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text("通知与提醒") },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator?.pop() }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        }
+                    },
                     actions = {
                         IconButton(onClick = { showCreate = true }) {
                             Icon(Icons.Default.Add, contentDescription = "新建提醒")

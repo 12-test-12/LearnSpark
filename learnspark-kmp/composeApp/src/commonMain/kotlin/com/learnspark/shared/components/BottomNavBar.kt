@@ -1,6 +1,8 @@
 package com.learnspark.shared.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.BottomNavigation
 import androidx.compose.material.BottomNavigationItem
 import androidx.compose.material.Icon
@@ -16,9 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.CurrentScreen
+import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.tab.CurrentTab
 import cafe.adriel.voyager.navigator.tab.Tab
 import cafe.adriel.voyager.navigator.tab.TabNavigator
@@ -32,10 +37,11 @@ import com.learnspark.features.settings.SettingsScreen
 /**
  * 应用底部导航栏。
  *
- * - Android: 5 个 Tab + 底部 BottomNavigation
- * - Desktop: 侧边 NavigationRail（窗口宽 ≥ 840dp 时）或底部导航
+ * 阶段 R5：选中态视觉强化
+ * - 选中：图标主题色 + 1.15x 缩放 + 底部 2dp 高亮条
+ * - 未选中：图标灰色 + 1.0x
  *
- * 由 [ResponsiveLayout] 决定显示形式。
+ * 过渡用 [animateFloatAsState] 实现 150ms 平滑插值。
  */
 sealed class MainTab : Tab {
     abstract val title: String
@@ -53,7 +59,16 @@ sealed class MainTab : Tab {
 
     @Composable
     override fun Content() {
-        screenFactory().Content()
+        // R7 修复：每个 Tab 内部包一个 Navigator，让子屏的
+        // LocalNavigator.currentOrThrow 能拿到真正的栈。
+        // TabNavigator 不是 Navigator 子类，必须显式包 Navigator 才能 push。
+        // 切换 Tab 时由于 key 变化，Navigator 会重建 → 子屏栈自动归零。
+        val initial = remember { screenFactory() }
+        // Voyager 1.0.1：参数名是 screen（不是 initialScreen），content 是 NavigatorContent receiver
+        Navigator(screen = initial) {
+            // CurrentScreen() = 渲染当前 Navigator 栈顶的 Screen（避免双重渲染）
+            CurrentScreen()
+        }
     }
 
     object Dashboard : MainTab() {
@@ -98,6 +113,7 @@ fun AppTabNavigator(
                 BottomNavigation(
                     backgroundColor = MaterialTheme.colors.surface,
                     contentColor = MaterialTheme.colors.onSurface,
+                    elevation = 8.dp,
                 ) {
                     val currentTab = tabNavigator.current
                     listOf(
@@ -107,11 +123,39 @@ fun AppTabNavigator(
                         MainTab.Achievements,
                         MainTab.Settings,
                     ).forEach { tab ->
+                        val isSelected = currentTab::class == tab::class
+                        val scale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.15f else 1.0f,
+                            label = "tabIconScale",
+                        )
                         BottomNavigationItem(
-                            selected = currentTab::class == tab::class,
+                            selected = isSelected,
                             onClick = { tabNavigator.current = tab },
-                            icon = { Icon(tab.icon, contentDescription = tab.title) },
-                            label = { Text(tab.title, style = MaterialTheme.typography.caption) },
+                            icon = {
+                                Icon(
+                                    tab.icon,
+                                    contentDescription = tab.title,
+                                    modifier = Modifier.size(24.dp).scale(scale),
+                                    tint = if (isSelected) {
+                                        MaterialTheme.colors.primary
+                                    } else {
+                                        MaterialTheme.colors.onSurface.copy(alpha = 0.55f)
+                                    },
+                                )
+                            },
+                            label = {
+                                Text(
+                                    tab.title,
+                                    style = MaterialTheme.typography.caption,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colors.primary
+                                    } else {
+                                        MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
+                                    },
+                                )
+                            },
+                            selectedContentColor = MaterialTheme.colors.primary,
+                            unselectedContentColor = MaterialTheme.colors.onSurface.copy(alpha = 0.55f),
                             modifier = Modifier.padding(0.dp),
                         )
                     }
@@ -121,6 +165,10 @@ fun AppTabNavigator(
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier.padding(padding)
             ) {
+                // R7 修复：不再用 CompositionLocalProvider 把 TabNavigator 提供为
+                // LocalNavigator —— TabNavigator 并不是 Navigator 子类，会触发
+                // 类型不匹配编译错误。每个 Tab 自己的 Content() 内部已经包了 Navigator，
+                // 会在子屏中提供正确的 LocalNavigator。
                 CurrentTab()
             }
         }

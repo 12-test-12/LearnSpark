@@ -113,12 +113,21 @@ private fun AccountCard(account: PointAccount, streak: Int, longestStreak: Int) 
                 }
             }
             Spacer(Modifier.height(4.dp))
+            // 修复：进度条百分比与文案一致；总积分 0 时显示 0%，不显示"满的"进度
             val progress = (account.total % 100) / 100f
+            val currentLevelProgress = account.total % 100
             LinearProgressIndicator(
                 progress = progress,
                 modifier = Modifier.fillMaxWidth().height(8.dp),
             )
-            Text("距离下一级还差 ${account.nextLevelPoints} 分", style = MaterialTheme.typography.caption)
+            Text(
+                if (account.nextLevelPoints > 0) {
+                    "距离下一级还差 ${account.nextLevelPoints} 分（当前 $currentLevelProgress / 100）"
+                } else {
+                    "已是最高等级"
+                },
+                style = MaterialTheme.typography.caption,
+            )
         }
     }
 }

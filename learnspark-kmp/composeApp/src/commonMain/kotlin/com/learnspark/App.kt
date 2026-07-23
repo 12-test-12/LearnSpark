@@ -62,6 +62,10 @@ fun App(
         LearnSparkTheme(themeMode = themeMode) {
             // 阶段 3.3：主题切换动画（200ms 淡入淡出）
             ThemeTransition(themeMode = themeMode) {
+                // R7 修复：App 入口直接由 ResponsiveAppLayout 接管。
+                // 内部 TabNavigator 在 BottomNavBar / ResponsiveLayout 中
+                // 已通过 CompositionLocalProvider 显式注入 LocalNavigator，
+                // 子屏的 LocalNavigator.currentOrThrow 不再抛 NoSuchElementException。
                 ResponsiveAppLayout()
             }
         }

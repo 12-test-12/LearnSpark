@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        阶段 R1：允许向本地回环（10.0.2.2 模拟器 / 127.0.0.1 真机）发起明文 HTTP，
+        用于开发与内测时连接本地后端。生产环境的真实域名应当走 HTTPS。
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

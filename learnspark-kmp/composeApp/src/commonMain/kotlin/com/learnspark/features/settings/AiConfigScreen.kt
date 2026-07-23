@@ -46,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import com.learnspark.data.model.AiProviderDto
 
 /**
@@ -67,13 +69,15 @@ object AiConfigScreen : Screen {
         val configs by vm.configs.collectAsState()
         val ui by vm.ui.collectAsState()
         var showAdd by remember { mutableStateOf(false) }
+        // R7 修复：安全获取 navigator
+        val navigator = runCatching { LocalNavigator.currentOrThrow }.getOrNull()
 
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text("AI 服务") },
                     navigationIcon = {
-                        IconButton(onClick = { vm.goBack() }) {
+                        IconButton(onClick = { navigator?.pop() }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                         }
                     },

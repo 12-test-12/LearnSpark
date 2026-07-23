@@ -5,9 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
@@ -15,63 +19,145 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.learnspark.shared.theme.LearnSparkColors
 import java.time.LocalDate
 
 /**
- * 阶段 3.3：7 日热力图（按文档 §3.3 仪表盘）。
+ * 学习日历热力图（GitHub 风格）。
  *
- * 简化版：7 列 × 1 行（按周内日），颜色按当周每日任务完成度（0~1）。
- * 真实数据：每日的「完成 / 总数」。
+ * - 12 周 × 7 天 = 84 个小格子
+ * - 颜色按当天的任务完成度分 5 档（0 / 低 / 中 / 高 / 满）
+ * - 右上角带"少 / 多"图例
  */
 @Composable
-fun WeeklyHeatmap(
-    dailyProgress: List<DailyProgress>,  // 长度 = 7
+fun StudyCalendar(
+    dailyProgress: List<DailyProgress>,
+    weeks: Int = 12,
     modifier: Modifier = Modifier,
 ) {
-    require(dailyProgress.size == 7) { "WeeklyHeatmap requires 7 days, got ${dailyProgress.size}" }
+    val cells = dailyProgress.takeLast(weeks * 7)
+    val weeksData = cells.chunked(7)
 
     Column(modifier = modifier) {
-        Text("7 日热力图", style = MaterialTheme.typography.subtitle1)
+        // 标题 + 90 天
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            dailyProgress.forEach { day ->
-                HeatmapCell(day = day)
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colors.primary.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("📅", style = MaterialTheme.typography.caption)
             }
+            Spacer(Modifier.width(8.dp))
+            Text("学习日历", style = MaterialTheme.typography.subtitle1, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.width(8.dp))
+            Text("近 ${weeksData.size * 7} 天", style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.5f))
+        }
+        Spacer(Modifier.height(8.dp))
+        // 网格
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            // 星期标签（一 / 二 / 三 / 四 / 五）
+            Column(
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.padding(top = 0.dp),
+            ) {
+                listOf("一", "", "三", "", "五").forEach { label ->
+                    Box(modifier = Modifier.size(12.dp), contentAlignment = Alignment.CenterStart) {
+                        if (label.isNotEmpty()) {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.caption,
+                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.width(4.dp))
+            weeksData.forEach { week ->
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    week.forEach { day ->
+                        HeatCell(day = day)
+                    }
+                    // 补齐空周（首周可能不到 7 天）
+                    repeat(7 - week.size) {
+                        Box(modifier = Modifier.size(12.dp))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        // 图例
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "少",
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
+            )
+            Spacer(Modifier.width(4.dp))
+            listOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f).forEach { level ->
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(HeatColor.forLevel(level)),
+                )
+                Spacer(Modifier.width(2.dp))
+            }
+            Spacer(Modifier.width(2.dp))
+            Text(
+                "多",
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
+            )
         }
     }
 }
 
 @Composable
-private fun HeatmapCell(day: DailyProgress) {
-    val color = when {
-        day.completed == 0 -> MaterialTheme.colors.onSurface.copy(alpha = 0.1f)
-        day.completed >= day.total -> MaterialTheme.colors.primary
-        day.completed.toFloat() / day.total.toFloat() >= 0.5f ->
-            MaterialTheme.colors.primary.copy(alpha = 0.6f)
-        else -> MaterialTheme.colors.primary.copy(alpha = 0.3f)
+private fun HeatCell(day: DailyProgress) {
+    val level = when {
+        day.total == 0 -> 0f
+        day.completed >= day.total -> 1f
+        else -> day.completed.toFloat() / day.total.toFloat()
     }
-    val dow = day.date.dayOfWeek.value // 1..7
-    val dowLabel = when (dow) {
-        1 -> "一"; 2 -> "二"; 3 -> "三"; 4 -> "四"; 5 -> "五"; 6 -> "六"; 7 -> "日"
-        else -> "?"
-    }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(color),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("${day.completed}", style = MaterialTheme.typography.caption, color = MaterialTheme.colors.onPrimary)
-        }
-        Text(dowLabel, style = MaterialTheme.typography.caption)
+    Box(
+        modifier = Modifier
+            .size(12.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(HeatColor.forLevel(level)),
+    )
+}
+
+object HeatColor {
+    private val empty = Color(0x33FFFFFF)
+    private val level1 = LearnSparkColors.Primary.copy(alpha = 0.25f)
+    private val level2 = LearnSparkColors.Primary.copy(alpha = 0.45f)
+    private val level3 = LearnSparkColors.Primary.copy(alpha = 0.7f)
+    private val level4 = LearnSparkColors.Primary
+
+    fun forLevel(level: Float): Color = when {
+        level <= 0f -> empty
+        level < 0.25f -> level1
+        level < 0.5f -> level2
+        level < 0.85f -> level3
+        else -> level4
     }
 }
 
@@ -81,10 +167,19 @@ data class DailyProgress(
     val completed: Int,
 )
 
-/**
- * 阶段 3.3：示例数据生成器。
- * 用最近 7 天的随机数据演示，后续接入真实数据源。
- */
+/** 12 周 × 7 天示例数据。 */
+fun demoCalendar12Weeks(): List<DailyProgress> {
+    val today = LocalDate.now()
+    val totalDays = 12 * 7
+    return (totalDays - 1 downTo 0).map { offset ->
+        val date = today.minusDays(offset.toLong())
+        val total = (2..7).random()
+        val completed = (0..total).random()
+        DailyProgress(date = date, total = total, completed = completed)
+    }
+}
+
+/** 单周 7 天示例数据（保留旧 WeeklyHeatmap 兼容）。 */
 fun demoWeeklyHeatmap(): List<DailyProgress> {
     val today = LocalDate.now()
     return (6 downTo 0).map { offset ->
@@ -93,4 +188,12 @@ fun demoWeeklyHeatmap(): List<DailyProgress> {
         val completed = (0..total).random()
         DailyProgress(date = date, total = total, completed = completed)
     }
+}
+
+@Composable
+fun WeeklyHeatmap(
+    dailyProgress: List<DailyProgress>,
+    modifier: Modifier = Modifier,
+) {
+    StudyCalendar(dailyProgress = dailyProgress, weeks = 1, modifier = modifier)
 }
