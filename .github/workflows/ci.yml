@@ -25,10 +25,12 @@ jobs:
 
       - name: Grant execute permission for gradlew
         shell: bash
+        working-directory: learnspark-kmp
         run: chmod +x gradlew
 
       - name: Show Gradle & Java version
         shell: bash
+        working-directory: learnspark-kmp
         run: |
           ./gradlew --version
           java -version
@@ -36,10 +38,12 @@ jobs:
       # ---------- 后端 ----------
       - name: Build server (bootJar)
         shell: bash
+        working-directory: learnspark-kmp
         run: ./gradlew.bat :server:bootJar --no-daemon
 
       - name: Run server tests
         shell: bash
+        working-directory: learnspark-kmp
         run: ./gradlew.bat :server:test --no-daemon
         continue-on-error: true   # 现阶段没测试，避免阻塞
 
@@ -47,23 +51,25 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: learnspark-server
-          path: server/build/libs/*.jar
+          path: learnspark-kmp/server/build/libs/*.jar
           if-no-files-found: warn
 
       # ---------- Desktop ----------
       - name: Compile Desktop
         shell: bash
+        working-directory: learnspark-kmp
         run: ./gradlew.bat :composeApp:compileKotlinDesktop --no-daemon
 
       - name: Package MSI
         shell: bash
+        working-directory: learnspark-kmp
         run: ./gradlew.bat :composeApp:packageMsi --no-daemon
 
       - name: Upload Desktop MSI
         uses: actions/upload-artifact@v4
         with:
           name: learnspark-desktop-msi
-          path: composeApp/build/compose/binaries/main/msi/**/*.msi
+          path: learnspark-kmp/composeApp/build/compose/binaries/main/msi/**/*.msi
           if-no-files-found: warn
 
       # ---------- Android ----------
@@ -72,25 +78,27 @@ jobs:
 
       - name: Compile Android (Debug)
         shell: bash
+        working-directory: learnspark-kmp
         run: ./gradlew.bat :composeApp:compileDebugKotlinAndroid --no-daemon
 
       - name: Assemble Debug APK
         shell: bash
+        working-directory: learnspark-kmp
         run: ./gradlew.bat :composeApp:assembleDebug --no-daemon
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: learnspark-android-debug
-          path: composeApp/build/outputs/apk/debug/*.apk
+          path: learnspark-kmp/composeApp/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
 
-  # ---------- 仅 main 分支跑：完整测试 + 上传构建产物 ----------
+  # ---------- 仅 master 分支跑：上传构建产物 ----------
   upload:
-    name: Upload Artifacts (main only)
+    name: Upload Artifacts (master only)
     needs: build
     runs-on: windows-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
