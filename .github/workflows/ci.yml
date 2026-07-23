@@ -233,12 +233,12 @@ jobs:
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0-linux.tar.gz
           if-no-files-found: error
 
-  # ---------- Release：仅在 push tag 时触发，自动发布到 GitHub Releases ----------
+  # ---------- Release：push master 时发布到 latest release，push tag v* 时发布对应 tag ----------
   release:
     name: Create GitHub Release
     needs: [build-windows, build-android, build-linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: write
     steps:
@@ -250,13 +250,29 @@ jobs:
       - name: List downloaded artifacts
         run: find dist -type f
 
+      - name: Determine release tag and name
+        id: meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "release_name=LearnSpark ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            # push master：使用固定 latest tag，每次自动覆盖同名 release
+            echo "tag_name=latest" >> "$GITHUB_OUTPUT"
+            echo "release_name=LearnSpark latest (master)" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: LearnSpark ${{ github.ref_name }}
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.release_name }}
           body: |
-            ## LearnSpark ${{ github.ref_name }}
+            ## ${{ steps.meta.outputs.release_name }}
+
+            构建自 commit `${{ github.sha }}`。
 
             包含四个产物：
 
@@ -277,4 +293,4 @@ jobs:
             dist/learnspark-linux-tar/LearnSpark-1.0.0-linux.tar.gz
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.meta.outputs.prerelease }}
