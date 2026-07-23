@@ -117,8 +117,8 @@ object AiConfigScreen : Screen {
                     }
                 }
                 Text(
-                    "支持多 provider：DeepSeek / OpenAI / Qwen / GLM / Moonshot / 自定义 OpenAI 兼容端点。\n" +
-                        "每个用户每 provider 最多一条配置；可在任务级选择本次使用的 provider。",
+                    "支持所有 OpenAI 兼容格式的大模型：DeepSeek / OpenAI / Qwen / GLM / Moonshot / 自定义。\n" +
+                        "只需填入 URL、API Key 和模型名即可，每个 provider 最多一条配置。",
                     style = MaterialTheme.typography.caption,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -150,7 +150,7 @@ object AiConfigScreen : Screen {
                                             "Key ${cfg.apiKeyMasked} · ${if (cfg.enabled) "启用" else "停用"} · v${cfg.version}",
                                             style = MaterialTheme.typography.caption,
                                         )
-                                        cfg.baseUrl?.let { Text("端点: $it", style = MaterialTheme.typography.caption) }
+                                        cfg.baseUrl?.let { Text("URL: $it", style = MaterialTheme.typography.caption) }
                                     }
                                     IconButton(onClick = { vm.deleteConfig(cfg.id) }) {
                                         Icon(Icons.Default.Delete, contentDescription = "删除")
@@ -258,7 +258,8 @@ private fun AddConfigDialog(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("端点（可留空使用默认）") },
+                    label = { Text("URL（如 https://api.openai.com/v1）") },
+                    placeholder = { Text("留空使用服务商默认 URL") },
                 )
             }
         },

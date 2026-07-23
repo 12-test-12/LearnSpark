@@ -7,36 +7,49 @@ import java.io.File
 /**
  * R4c Desktop：使用 AWT FileDialog。
  *
- * 限制：单文件选择；modal dialog；通过 AWT 线程调度避免阻塞 EDT。
+ * pickFile：单选
+ * pickFiles：多选（isMultipleMode = true）
  */
 actual object FilePicker {
     actual suspend fun pickFile(
         title: String,
         allowedExtensions: Set<String>,
     ): PickedFile? {
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val frame = Frame()
-            val dialog = FileDialog(frame, title, FileDialog.LOAD).apply {
-                isModal = true
-                isMultipleMode = false
-                if (allowedExtensions.isNotEmpty()) {
-                    setFilenameFilter { _, name ->
-                        val ext = name.substringAfterLast('.', "").lowercase()
-                        ext.isNotEmpty() && allowedExtensions.contains(ext)
-                    }
+        return pickFilesInternal(title, allowedExtensions, multiple = false).firstOrNull()
+    }
+
+    actual suspend fun pickFiles(
+        title: String,
+        allowedExtensions: Set<String>,
+    ): List<PickedFile> {
+        return pickFilesInternal(title, allowedExtensions, multiple = true)
+    }
+
+    private suspend fun pickFilesInternal(
+        title: String,
+        allowedExtensions: Set<String>,
+        multiple: Boolean,
+    ): List<PickedFile> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val frame = Frame()
+        val dialog = FileDialog(frame, title, FileDialog.LOAD).apply {
+            isModal = true
+            isMultipleMode = multiple
+            if (allowedExtensions.isNotEmpty()) {
+                setFilenameFilter { _, name ->
+                    val ext = name.substringAfterLast('.', "").lowercase()
+                    ext.isNotEmpty() && allowedExtensions.contains(ext)
                 }
             }
-            try {
-                dialog.isVisible = true
-                val dir = dialog.directory
-                val file = dialog.file
-                if (dir == null || file == null) return@withContext null
-                val f = File(dir, file)
-                PickedFile(name = f.name, bytes = f.readBytes())
-            } finally {
-                dialog.dispose()
-                frame.dispose()
-            }
+        }
+        try {
+            dialog.isVisible = true
+            val dir = dialog.directory ?: return@withContext emptyList()
+            val files = dialog.files
+            if (files.isEmpty()) return@withContext emptyList()
+            files.map { f -> PickedFile(name = f.name, bytes = f.readBytes()) }
+        } finally {
+            dialog.dispose()
+            frame.dispose()
         }
     }
 }

@@ -52,7 +52,8 @@ class ReminderViewModel(
                 remote.forEach { repository.upsertSetting(ReminderSettingDto.fromMap(it)) }
                 _ui.value = _ui.value.copy(loading = false)
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(loading = false, error = e.message ?: "unknown")
+                // 离线时静默：本地数据库已有缓存数据，UI 正常显示
+                _ui.value = _ui.value.copy(loading = false)
             }
         }
     }
@@ -61,23 +62,20 @@ class ReminderViewModel(
         screenModelScope.launch {
             try {
                 val remote = api.listReminderLogs(userId, pendingOnly = true)
-                val existingIds = repository.getAllSettings().map { it.id }.toSet()
-                val allSettings = repository.getAllSettings().associateBy { it.id }
                 remote.forEach { map ->
                     val dto = ReminderLogDto.fromMap(map)
-                    val prev = repository.observeAllLogs()
                     repository.upsertLog(dto)
-                    // 新通知：触发平台原生通知
-                    if (showNotifications && !dto.acknowledged && dto.id !in existingIds) {
+                    if (showNotifications && !dto.acknowledged) {
                         notificationManager.notify(
                             title = dto.title,
-                            body = dto.message ?: allSettings[dto.settingId]?.message ?: "您有一条新提醒",
+                            body = dto.message ?: "您有一条新提醒",
                         )
                     }
                 }
                 _ui.value = _ui.value.copy(lastPollAt = System.currentTimeMillis())
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "拉取通知失败：${e.message}")
+                // 离线时静默：本地缓存仍可显示
+                _ui.value = _ui.value.copy(lastPollAt = System.currentTimeMillis())
             }
         }
     }
@@ -103,7 +101,23 @@ class ReminderViewModel(
                 )
                 repository.upsertSetting(ReminderSettingDto.fromMap(raw))
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "新建失败：${e.message}")
+                // 离线回退：本地创建，标记为 dirty 待同步
+                val now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()
+                val dto = ReminderSettingDto(
+                    id = java.util.UUID.randomUUID().toString(),
+                    userId = userId,
+                    type = "CUSTOM",
+                    title = title,
+                    message = message,
+                    triggerTime = triggerTime,
+                    repeatPattern = repeatPattern,
+                    weekdayMask = weekdayMask,
+                    enabled = enabled,
+                    version = 0L,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+                repository.upsertSetting(dto, isDirty = true)
             }
         }
     }
@@ -123,7 +137,8 @@ class ReminderViewModel(
                 )
                 repository.upsertSetting(ReminderSettingDto.fromMap(raw))
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "更新失败：${e.message}")
+                // 离线回退：本地更新，标记为 dirty
+                repository.upsertSetting(setting.copy(updatedAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()), isDirty = true)
             }
         }
     }
@@ -134,7 +149,8 @@ class ReminderViewModel(
                 val raw = api.updateReminderSetting(userId, setting.id, enabled = enabled)
                 repository.upsertSetting(ReminderSettingDto.fromMap(raw))
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "切换状态失败：${e.message}")
+                // 离线回退
+                repository.upsertSetting(setting.copy(enabled = enabled, updatedAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()), isDirty = true)
             }
         }
     }
@@ -145,7 +161,8 @@ class ReminderViewModel(
                 api.deleteReminderSetting(userId, setting.id)
                 repository.deleteSetting(setting.id)
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "删除失败：${e.message}")
+                // 离线回退：本地删除
+                repository.deleteSetting(setting.id)
             }
         }
     }
@@ -154,10 +171,10 @@ class ReminderViewModel(
         screenModelScope.launch {
             try {
                 api.ackReminderLog(userId, log.id)
-                repository.acknowledgeLog(log.id)
-            } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "确认失败：${e.message}")
+            } catch (_: Exception) {
+                // 离线时仅本地确认
             }
+            repository.acknowledgeLog(log.id)
         }
     }
 
@@ -165,10 +182,10 @@ class ReminderViewModel(
         screenModelScope.launch {
             try {
                 api.ackAllReminderLogs(userId)
-                repository.acknowledgeAllLogs()
-            } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "清空失败：${e.message}")
+            } catch (_: Exception) {
+                // 离线时仅本地确认
             }
+            repository.acknowledgeAllLogs()
         }
     }
 

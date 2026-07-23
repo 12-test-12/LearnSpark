@@ -19,4 +19,15 @@ expect object FilePicker {
         title: String = "选择文件",
         allowedExtensions: Set<String> = emptySet(),
     ): PickedFile?
+
+    /**
+     * 弹出多文件选择器（支持批量选择）。
+     * @param title 标题（仅 Desktop 显示）
+     * @param allowedExtensions 允许的扩展名集合
+     * @return 用户选择的结果列表；取消时返回空列表
+     */
+    suspend fun pickFiles(
+        title: String = "选择文件",
+        allowedExtensions: Set<String> = emptySet(),
+    ): List<PickedFile>
 }

@@ -85,6 +85,15 @@ kotlin {
             // JNA for Desktop secure keystore
             implementation(libs.jna)
             implementation(libs.jna.platform)
+
+            // R8：嵌入 Spring Boot 服务端，Desktop 启动时同时启动服务端
+            // 手机端通过局域网 IP 连接 Desktop 的 8080 端口即可同步
+            // 注意：:server 模块的 Spring 依赖是 implementation（不传递），所以这里要显式声明
+            // spring-boot-starter-web 会传递依赖 spring-boot（含 SpringApplication）+ spring-context + spring-web
+            implementation(project(":server"))
+            implementation(libs.spring.boot.starter.web)
+            implementation(libs.spring.boot.starter.data.jpa)
+            runtimeOnly(libs.h2.database)
         }
     }
 }
@@ -170,12 +179,18 @@ compose.desktop {
         windows {
             menuGroup = "LearnSpark"
             upgradeUuid = "8a7b3c2d-1e4f-4a5b-9c8d-7e6f5a4b3c2d"
+            // R8-图标：EXE 资源（多尺寸 .ico）
+            iconFile.set(project.file("src/desktopMain/resources/icon.ico"))
         }
         macOS {
             bundleID = "com.learnspark"
+            // R8-图标：DMG 资源（多尺寸 .icns）
+            iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
         }
         linux {
             packageName = "learnspark"
+            // R8-图标：DEB 资源（256×256 png）
+            iconFile.set(project.file("src/desktopMain/resources/icon-256.png"))
         }
     }
     }

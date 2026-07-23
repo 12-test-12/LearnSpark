@@ -31,6 +31,7 @@ dependencies {
 
     // 数据库
     runtimeOnly(libs.mysql.connector.j)
+    runtimeOnly(libs.h2.database)  // R8：本地开发用 H2 文件数据库，不需要 MySQL
     implementation(libs.flyway.core)
     implementation(libs.flyway.mysql)
 

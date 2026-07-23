@@ -571,6 +571,37 @@ class LearnSparkApi(
     }
 
     /**
+     * R8：上传文件到知识库（支持批量调用）。
+     * 调用 POST /api/v1/knowledge/upload，服务端保存文件并创建 KnowledgeEntry。
+     */
+    suspend fun uploadKnowledgeFile(
+        userId: String,
+        fileBytes: ByteArray,
+        fileName: String,
+        title: String? = null,
+    ): Map<String, Any?> {
+        val resp = httpClient.post("$baseUrl/api/v1/knowledge/upload") {
+            headers { append("X-User-Id", userId) }
+            setBody(
+                io.ktor.client.request.forms.MultiPartFormDataContent(
+                    io.ktor.client.request.forms.formData {
+                        append(
+                            "file",
+                            fileBytes,
+                            io.ktor.http.Headers.build {
+                                append(io.ktor.http.HttpHeaders.ContentDisposition, "filename=\"$fileName\"")
+                                append(io.ktor.http.HttpHeaders.ContentType, "application/octet-stream")
+                            }
+                        )
+                        title?.let { append("title", it) }
+                    }
+                )
+            )
+        }
+        return (resp.body() as JsonObject).toMap()
+    }
+
+    /**
      * 下载 task 上传的文件字节。
      */
     suspend fun downloadTaskUploadFile(userId: String, taskId: String, uploadId: String): ByteArray {

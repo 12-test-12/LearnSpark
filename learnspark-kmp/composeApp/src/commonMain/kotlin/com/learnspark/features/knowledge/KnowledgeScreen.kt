@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -111,6 +112,9 @@ object KnowledgeScreen : Screen {
                         IconButton(onClick = { vm.refresh() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "刷新")
                         }
+                        IconButton(onClick = { vm.uploadFiles() }, enabled = !ui.uploading) {
+                            Icon(Icons.Default.Upload, contentDescription = "上传文件")
+                        }
                         IconButton(onClick = { showCreate = true }) {
                             Icon(Icons.Default.Add, contentDescription = "新建文件夹")
                         }
@@ -124,6 +128,13 @@ object KnowledgeScreen : Screen {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Text("同步中…", style = MaterialTheme.typography.caption)
+                    }
+                }
+                ui.uploadProgress?.let { progress ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(progress, style = MaterialTheme.typography.caption)
                     }
                 }
                 ui.error?.let { _ ->
@@ -149,8 +160,8 @@ object KnowledgeScreen : Screen {
                     if (rootFolders.isEmpty() && unfiled.isEmpty()) {
                         EmptyState(
                             title = "还没有任何文件",
-                            description = "把学习资料上传到这里集中管理。试试让 AI 帮你整理归类，或者新建一个文件夹开始。",
-                            primaryAction = "AI 一键整理" to { showOrganize = true },
+                            description = "把学习资料上传到这里集中管理。支持批量选择多个文件，试试让 AI 帮你整理归类。",
+                            primaryAction = "上传文件" to { vm.uploadFiles() },
                             secondaryAction = "新建文件夹" to { showCreate = true },
                         )
                     } else {

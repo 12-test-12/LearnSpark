@@ -21,10 +21,16 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* 不处理：NotImpl 内部 catch */ }
 
-    // 阶段 R4c：OpenDocument 文件选择回调
+    // 阶段 R4c：OpenDocument 文件选择回调（单选）
     private val openDocumentLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             FilePicker.dispatchResult(uri)
+        }
+
+    // R8：OpenMultipleDocuments 多文件选择回调（批量上传）
+    private val openMultipleDocumentsLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            FilePicker.dispatchMultiResult(uris)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +40,7 @@ class MainActivity : ComponentActivity() {
         // 阶段 R4c：注册 Activity + 文件选择 launcher
         ActivityHolder.current = this
         IntentLauncherHolder.launcher = { types -> openDocumentLauncher.launch(types) }
+        IntentLauncherHolder.multiLauncher = { types -> openMultipleDocumentsLauncher.launch(types) }
 
         // 阶段 1.1.6：启动 Koin
         startKoin {
@@ -55,6 +62,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         ActivityHolder.current = null
         IntentLauncherHolder.launcher = null
+        IntentLauncherHolder.multiLauncher = null
     }
 }
 

@@ -5,17 +5,15 @@ import android.net.Uri
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * R4c Android: file picker via ActivityResultContracts.OpenDocument.
+ * R4c Android: file picker via ActivityResultContracts.OpenDocument / OpenMultipleDocuments.
  *
- * Flow:
- *  1. MainActivity.registerForActivityResult owns the launcher.
- *  2. FilePicker.pickFile() invokes the launcher and parks a continuation.
- *  3. Activity callback fires dispatchResult(uri) which resumes the continuation.
- *  4. Continuation reads bytes from the content URI.
+ * pickFile：单选（OpenDocument）
+ * pickFiles：多选（OpenMultipleDocuments）
  */
 actual object FilePicker {
 
     private val pendingResult: AtomicReference<((Uri?) -> Unit)?> = AtomicReference(null)
+    private val pendingMultiResult: AtomicReference<((List<Uri>) -> Unit)?> = AtomicReference(null)
 
     actual suspend fun pickFile(
         title: String,
@@ -34,9 +32,33 @@ actual object FilePicker {
         return PickedFile(name = name, bytes = bytes)
     }
 
+    actual suspend fun pickFiles(
+        title: String,
+        allowedExtensions: Set<String>,
+    ): List<PickedFile> {
+        val launcher = IntentLauncherHolder.multiLauncher ?: return emptyList()
+        val uris: List<Uri> = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            pendingMultiResult.set { result -> cont.resumeWith(Result.success(result)) }
+            launcher(extensionsToMimeTypes(allowedExtensions))
+        }
+        if (uris.isEmpty()) return emptyList()
+        val activity = ActivityHolder.current ?: return emptyList()
+        return uris.mapNotNull { uri ->
+            val name = queryDisplayName(activity, uri) ?: "upload-${System.currentTimeMillis()}"
+            val bytes = activity.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return@mapNotNull null
+            PickedFile(name = name, bytes = bytes)
+        }
+    }
+
     internal fun dispatchResult(uri: Uri?) {
         val cb = pendingResult.getAndSet(null) ?: return
         cb(uri)
+    }
+
+    internal fun dispatchMultiResult(uris: List<Uri>) {
+        val cb = pendingMultiResult.getAndSet(null) ?: return
+        cb(uris)
     }
 
     private fun queryDisplayName(activity: Activity, uri: Uri): String? {
@@ -58,6 +80,9 @@ object ActivityHolder {
 object IntentLauncherHolder {
     @Volatile
     var launcher: ((Array<String>) -> Unit)? = null
+
+    @Volatile
+    var multiLauncher: ((Array<String>) -> Unit)? = null
 }
 
 /** Extension -> MIME type. Empty set or unknown extensions falls back to * / *. */

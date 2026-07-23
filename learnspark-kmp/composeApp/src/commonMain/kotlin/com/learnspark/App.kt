@@ -1,10 +1,16 @@
 package com.learnspark
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import com.learnspark.features.notification.ReminderViewModel
+import com.learnspark.data.sync.SyncManager
 import com.learnspark.shared.components.ResponsiveAppLayout
 import com.learnspark.shared.components.ThemeTransition
 import com.learnspark.shared.theme.LearnSparkTheme
@@ -58,15 +64,25 @@ fun App(
     // 阶段 R3b：主动拉一次 ReminderViewModel，触发其 init 中的轮询循环
     val reminderVm: ReminderViewModel = koinInject()
 
+    // R8：启动跨端数据同步（每 30s push dirty + pull 最新）
+    val syncManager: SyncManager = koinInject()
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        syncManager.start()
+    }
+
     CompositionLocalProvider(LocalThemeMode provides themeMode) {
         LearnSparkTheme(themeMode = themeMode) {
-            // 阶段 3.3：主题切换动画（200ms 淡入淡出）
-            ThemeTransition(themeMode = themeMode) {
-                // R7 修复：App 入口直接由 ResponsiveAppLayout 接管。
-                // 内部 TabNavigator 在 BottomNavBar / ResponsiveLayout 中
-                // 已通过 CompositionLocalProvider 显式注入 LocalNavigator，
-                // 子屏的 LocalNavigator.currentOrThrow 不再抛 NoSuchElementException。
-                ResponsiveAppLayout()
+            // R8 修复：用主题背景色填充整个窗口，确保 PC 端主题一致
+            // （之前没有 fillMaxSize + background，导致窗口边缘露出系统默认色）
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colors.background),
+            ) {
+                // 阶段 3.3：主题切换动画（200ms 淡入淡出）
+                ThemeTransition(themeMode = themeMode) {
+                    ResponsiveAppLayout()
+                }
             }
         }
     }

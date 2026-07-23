@@ -68,42 +68,75 @@ class FileViewerViewModel(
 
     private suspend fun loadKnowledge(userId: String, source: Source.Knowledge) {
         val kind = classifyForView(source.fileType, source.fileName)
+        // 优先尝试服务端解析的纯文本
         if (kind == ViewKind.TEXT) {
-            val text = api.getKnowledgeText(userId, source.entryId)
-            if (!text.isNullOrBlank()) {
-                _state.value = UiState.Text(text)
-                return
+            try {
+                val text = api.getKnowledgeText(userId, source.entryId)
+                if (!text.isNullOrBlank()) {
+                    _state.value = UiState.Text(text)
+                    return
+                }
+            } catch (_: Exception) {
+                // 离线时跳过，继续尝试本地缓存
             }
         }
+        // 尝试本地缓存（离线时仍可查看已下载过的文件）
         val key = "knowledge:${source.entryId}"
-        val bytes = fileCache.get(key) ?: run {
+        val cached = fileCache.get(key)
+        if (cached != null) {
+            lastCacheKey = key
+            _state.value = UiState.Bytes(
+                bytes = cached,
+                fileName = source.fileName,
+                fileType = source.fileType,
+                viewKind = kind,
+            )
+            return
+        }
+        // 本地无缓存 → 从服务端下载
+        try {
             val downloaded = api.downloadKnowledgeFile(userId, source.entryId)
             fileCache.put(key, downloaded)
-            downloaded
+            lastCacheKey = key
+            _state.value = UiState.Bytes(
+                bytes = downloaded,
+                fileName = source.fileName,
+                fileType = source.fileType,
+                viewKind = kind,
+            )
+        } catch (e: Exception) {
+            _state.value = UiState.Error("无法加载文件：${e.message ?: "网络不可用"}。\n请先联网下载一次，之后即可离线查看。")
         }
-        lastCacheKey = key
-        _state.value = UiState.Bytes(
-            bytes = bytes,
-            fileName = source.fileName,
-            fileType = source.fileType,
-            viewKind = kind,
-        )
     }
 
     private suspend fun loadTaskUpload(userId: String, source: Source.TaskUpload) {
         val key = "task_upload:${source.uploadId}"
-        val bytes = fileCache.get(key) ?: run {
+        // 优先本地缓存
+        val cached = fileCache.get(key)
+        if (cached != null) {
+            lastCacheKey = key
+            _state.value = UiState.Bytes(
+                bytes = cached,
+                fileName = source.fileName,
+                fileType = source.fileType,
+                viewKind = classifyForView(source.fileType, source.fileName),
+            )
+            return
+        }
+        // 本地无缓存 → 从服务端下载
+        try {
             val downloaded = api.downloadTaskUploadFile(userId, source.taskId, source.uploadId)
             fileCache.put(key, downloaded)
-            downloaded
+            lastCacheKey = key
+            _state.value = UiState.Bytes(
+                bytes = downloaded,
+                fileName = source.fileName,
+                fileType = source.fileType,
+                viewKind = classifyForView(source.fileType, source.fileName),
+            )
+        } catch (e: Exception) {
+            _state.value = UiState.Error("无法加载文件：${e.message ?: "网络不可用"}。\n请先联网下载一次，之后即可离线查看。")
         }
-        lastCacheKey = key
-        _state.value = UiState.Bytes(
-            bytes = bytes,
-            fileName = source.fileName,
-            fileType = source.fileType,
-            viewKind = classifyForView(source.fileType, source.fileName),
-        )
     }
 
     fun openWithSystem() {

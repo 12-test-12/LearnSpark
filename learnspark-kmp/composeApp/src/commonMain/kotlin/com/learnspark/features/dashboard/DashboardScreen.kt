@@ -1,6 +1,7 @@
 package com.learnspark.features.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +57,10 @@ import com.learnspark.shared.components.demoCalendar12Weeks
 import com.learnspark.shared.theme.LearnSparkColors
 import com.learnspark.shared.theme.LocalIsDarkTheme
 import com.learnspark.features.knowledge.KnowledgeScreen
+import com.learnspark.features.projects.ProjectsScreen
+import com.learnspark.features.settings.SettingsScreen
 import org.koin.compose.koinInject
+import androidx.compose.material.Button
 
 /**
  * 首页（仪表盘）。
@@ -88,7 +92,7 @@ object DashboardScreen : Screen {
         ) {
             ScreenTopBar(
                 title = "仪表盘",
-                onAvatarClick = { /* TODO: 打开用户中心 */ },
+                onAvatarClick = { navigator?.push(SettingsScreen) },
             )
 
             Column(
@@ -115,7 +119,7 @@ object DashboardScreen : Screen {
                         label = "待办任务",
                         value = "${state.pendingTaskCount}",
                         suffix = "项",
-                        onClick = { /* TODO: 跳转任务页 */ },
+                        onClick = { navigator?.push(ProjectsScreen) },
                     )
                     MetricTile(
                         modifier = Modifier.weight(1f),
@@ -126,6 +130,7 @@ object DashboardScreen : Screen {
                         value = "${state.streakDays}",
                         suffix = "天",
                         caption = if (state.streakDays == 0) "开启第一天" else null,
+                        onClick = { if (!state.checkedInToday) vm.checkIn() },
                     )
                     MetricTile(
                         modifier = Modifier.weight(1f),
@@ -134,10 +139,46 @@ object DashboardScreen : Screen {
                         iconBackground = LearnSparkColors.Info.copy(alpha = 0.18f),
                         label = "总积分",
                         value = "${state.totalPoints}",
+                        onClick = { navigator?.push(com.learnspark.features.achievements.AchievementsScreen) },
                     )
                 }
 
-                // ===== 3. 待办任务列表 =====
+                // ===== 3. 每日打卡 =====
+                StatCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(LearnSparkColors.Warning.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("🔥", fontSize = 18.sp)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (state.checkedInToday) "今日已打卡" else "今日还未打卡",
+                                style = MaterialTheme.typography.subtitle1,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                if (state.streakDays == 0) "开启第一天的连续打卡记录"
+                                else "已连续 ${state.streakDays} 天，继续保持",
+                                style = MaterialTheme.typography.caption,
+                                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
+                        if (!state.checkedInToday) {
+                            Button(onClick = { vm.checkIn() }) { Text("打卡") }
+                        }
+                    }
+                }
+
+                // ===== 4. 待办任务列表 =====
                 StatCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         SectionHeader(
@@ -148,18 +189,21 @@ object DashboardScreen : Screen {
                         Spacer(Modifier.height(8.dp))
                         if (state.todayTasks.isEmpty()) {
                             Text(
-                                "今天还没有任务 — 打开项目添加你的第一个任务",
+                                "今天还没有任务，先添加一个微习惯开始吧",
                                 style = MaterialTheme.typography.body2,
                                 color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(vertical = 8.dp),
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = { navigator?.push(ProjectsScreen) }) {
+                                Text("去创建任务")
+                            }
                         } else {
                             state.todayTasks.take(3).forEach { task ->
                                 TaskRow(
                                     title = task.title,
                                     subtitle = task.project,
                                     status = task.statusLabel,
-                                    onStart = { /* TODO: 启动番茄钟 */ },
+                                    onStart = { navigator?.push(ProjectsScreen) },
                                 )
                             }
                         }
@@ -198,6 +242,7 @@ private fun TaskRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onStart)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -249,7 +294,7 @@ private fun KnowledgeEntryCard(
     count: Int,
     onClick: () -> Unit,
 ) {
-    StatCard(modifier = Modifier.fillMaxWidth()) {
+    StatCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

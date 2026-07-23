@@ -16,11 +16,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.AlertDialog
 import androidx.compose.material.Card
+import androidx.compose.material.Button
 import androidx.compose.material.Icon
 import androidx.compose.material.LinearProgressIndicator
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -34,7 +38,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +53,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.learnspark.data.db.ProjectRepository
 import com.learnspark.data.model.ProjectDto
+import com.learnspark.features.settings.AiConfigScreen
 import com.learnspark.shared.components.ActionButton
 import com.learnspark.shared.components.CircularProgressRing
 import com.learnspark.shared.components.ScreenTopBar
@@ -83,6 +90,8 @@ object ProjectsScreen : Screen {
 
         val state = remember { MutableStateFlow(ProjectsUiState()) }
         val ui by state.collectAsState()
+        var showCreate by remember { mutableStateOf(false) }
+        var showEdit by remember { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
             // 监听项目变化
@@ -143,14 +152,14 @@ object ProjectsScreen : Screen {
                 ) {
                     ActionButton(
                         text = "编辑项目",
-                        onClick = { /* TODO */ },
+                        onClick = { if (ui.project != null) showEdit = true },
                         background = MaterialTheme.colors.surface,
                         foreground = MaterialTheme.colors.onSurface,
                         leadingIcon = Icons.Filled.Edit,
                     )
                     ActionButton(
                         text = "AI 生成路线",
-                        onClick = { /* TODO */ },
+                        onClick = { navigator?.push(AiConfigScreen) },
                         background = LearnSparkColors.Info,
                         foreground = MaterialTheme.colors.onPrimary,
                         leadingIcon = Icons.Filled.AutoAwesome,
@@ -158,7 +167,7 @@ object ProjectsScreen : Screen {
                 }
                 ActionButton(
                     text = "添加任务",
-                    onClick = { /* TODO */ },
+                    onClick = { showCreate = true },
                     background = MaterialTheme.colors.primary,
                     foreground = MaterialTheme.colors.onPrimary,
                     leadingIcon = Icons.Filled.Add,
@@ -167,19 +176,7 @@ object ProjectsScreen : Screen {
                 // ===== 项目进度卡 =====
                 ui.project?.let { p ->
                     ProjectProgressCard(project = p)
-                } ?: EmptyProjectCard(onCreate = {
-                    scope.launch {
-                        // 演示：创建一个示例项目
-                        val newProject = ProjectDto(
-                            id = java.util.UUID.randomUUID().toString(),
-                            name = "新项目 ${System.currentTimeMillis() / 1000}",
-                            goal = "在这里写下目标",
-                            createdAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString(),
-                            updatedAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString(),
-                        )
-                        repository.upsert(newProject)
-                    }
-                })
+                } ?: EmptyProjectCard(onCreate = { showCreate = true })
 
                 // ===== 学习路线 =====
                 StatCard(modifier = Modifier.fillMaxWidth()) {
@@ -204,6 +201,43 @@ object ProjectsScreen : Screen {
 
                 Spacer(Modifier.height(16.dp))
             }
+        }
+
+        if (showCreate) {
+            CreateProjectDialog(
+                onDismiss = { showCreate = false },
+                onCreate = { name, goal ->
+                    scope.launch {
+                        val now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()
+                        repository.upsert(
+                            ProjectDto(
+                                id = java.util.UUID.randomUUID().toString(),
+                                name = name,
+                                goal = goal,
+                                createdAt = now,
+                                updatedAt = now,
+                            )
+                        )
+                    }
+                    showCreate = false
+                },
+            )
+        }
+        if (showEdit && ui.project != null) {
+            val p = ui.project!!
+            EditProjectDialog(
+                initialName = p.name,
+                initialGoal = p.goal ?: "",
+                onDismiss = { showEdit = false },
+                onSave = { name, goal ->
+                    scope.launch {
+                        repository.upsert(
+                            p.copy(name = name, goal = goal, updatedAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString())
+                        )
+                    }
+                    showEdit = false
+                },
+            )
         }
     }
 }
@@ -429,3 +463,81 @@ private data class ProjectsUiState(
     val project: ProjectDto? = null,
     val allProjects: List<ProjectDto> = emptyList(),
 )
+
+@Composable
+private fun CreateProjectDialog(
+    onDismiss: () -> Unit,
+    onCreate: (name: String, goal: String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var goal by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("新建任务") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("任务名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = goal,
+                    onValueChange = { goal = it },
+                    label = { Text("学习目标（可选）") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onCreate(name, goal.ifBlank { "" }) },
+            ) { Text("创建") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun EditProjectDialog(
+    initialName: String,
+    initialGoal: String,
+    onDismiss: () -> Unit,
+    onSave: (name: String, goal: String) -> Unit,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var goal by remember { mutableStateOf(initialGoal) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑项目") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("项目名称") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = goal,
+                    onValueChange = { goal = it },
+                    label = { Text("学习目标") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onSave(name, goal) },
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}

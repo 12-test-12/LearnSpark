@@ -14,6 +14,7 @@ import com.learnspark.data.db.ReminderRepository
 import com.learnspark.data.migration.LegacyDataLocator
 import com.learnspark.data.migration.MigrationService
 import com.learnspark.data.migration.MigrationViewModel
+import com.learnspark.data.sync.SyncManager
 import com.learnspark.db.LearnSparkDb
 import com.learnspark.features.knowledge.KnowledgeViewModel
 import com.learnspark.features.notification.NotificationManager
@@ -89,6 +90,9 @@ val coreModule: Module = module {
 
     // 阶段 R6a：仪表盘聚合 ViewModel
     single { DashboardViewModel(get(), get()) }
+
+    // R8：跨端数据同步管理器
+    single { SyncManager(get(), get(), get(), get()) }
 }
 
 /**

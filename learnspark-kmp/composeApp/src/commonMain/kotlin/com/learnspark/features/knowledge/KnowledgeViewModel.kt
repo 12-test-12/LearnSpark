@@ -2,6 +2,8 @@ package com.learnspark.features.knowledge
 
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.learnspark.core.files.FilePicker
+import com.learnspark.core.files.PickedFile
 import com.learnspark.data.api.LearnSparkApi
 import com.learnspark.data.db.KnowledgeFolderRepository
 import com.learnspark.data.model.KnowledgeEntryDto
@@ -56,7 +58,8 @@ class KnowledgeViewModel(
                 refreshEntries()
                 _ui.value = _ui.value.copy(loading = false)
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(loading = false, error = e.message ?: "unknown")
+                // 离线时静默：本地数据库已有缓存，UI 正常显示
+                _ui.value = _ui.value.copy(loading = false)
             }
         }
     }
@@ -67,7 +70,7 @@ class KnowledgeViewModel(
                 val remote = api.listKnowledgeEntries(userId, page = 0, size = 200)
                 _entries.value = remote.map(KnowledgeEntryDto::fromMap)
             } catch (_: Exception) {
-                // 静默：轮询失败不打扰用户
+                // 离线时静默：保留已有数据
             }
         }
     }
@@ -94,7 +97,26 @@ class KnowledgeViewModel(
                 repository.upsert(dto)
                 onCreated?.invoke(dto)
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "新建失败：${e.message}")
+                // 离线回退：服务端不可达时，本地创建文件夹
+                // 文件夹保存到软件安装目录的 data/uploads 下
+                val now = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()
+                val parent = parentId?.let { repository.getById(it) }
+                val dto = KnowledgeFolderDto(
+                    id = java.util.UUID.randomUUID().toString(),
+                    userId = userId,
+                    parentId = parentId,
+                    name = name,
+                    icon = "📁",
+                    sortOrder = 0,
+                    path = if (parent != null) "${parent.path}/${parent.name}" else "/",
+                    depth = (parent?.depth ?: -1) + 1,
+                    version = 0L,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+                repository.upsert(dto)
+                onCreated?.invoke(dto)
+                _ui.value = _ui.value.copy(error = null)
             }
         }
     }
@@ -105,7 +127,9 @@ class KnowledgeViewModel(
                 val raw = api.updateFolder(userId, id, name = newName)
                 repository.upsert(KnowledgeFolderDto.fromMap(raw))
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "重命名失败：${e.message}")
+                // 离线回退：本地重命名
+                val existing = repository.getById(id) ?: return@launch
+                repository.upsert(existing.copy(name = newName, updatedAt = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()))
             }
         }
     }
@@ -128,7 +152,8 @@ class KnowledgeViewModel(
                 api.deleteFolder(userId, id)
                 refresh()
             } catch (e: Exception) {
-                _ui.value = _ui.value.copy(error = "删除失败：${e.message}")
+                // 离线回退：本地软删除
+                repository.softDelete(id)
             }
         }
     }
@@ -186,10 +211,52 @@ class KnowledgeViewModel(
         _ui.value = _ui.value.copy(error = null)
     }
 
+    /**
+     * R8：批量上传文件到知识库。
+     * 弹出多文件选择器，逐个上传到服务端，并实时更新进度状态。
+     */
+    fun uploadFiles() {
+        screenModelScope.launch {
+            _ui.value = _ui.value.copy(uploading = true, uploadProgress = "正在选择文件…", error = null)
+            val files = try {
+                FilePicker.pickFiles(
+                    title = "选择知识库文件（可多选）",
+                    allowedExtensions = setOf("pdf", "md", "txt", "docx", "pptx", "xlsx", "html", "htm", "enex", "png", "jpg", "jpeg", "bmp"),
+                )
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(uploading = false, uploadProgress = null, error = "选择文件失败：${e.message}")
+                return@launch
+            }
+            if (files.isEmpty()) {
+                _ui.value = _ui.value.copy(uploading = false, uploadProgress = null)
+                return@launch
+            }
+            var success = 0
+            var failed = 0
+            files.forEachIndexed { idx, file ->
+                _ui.value = _ui.value.copy(uploadProgress = "上传中 ${idx + 1}/${files.size}：${file.name}")
+                try {
+                    api.uploadKnowledgeFile(userId, file.bytes, file.name)
+                    success++
+                } catch (e: Exception) {
+                    failed++
+                }
+            }
+            refreshEntries()
+            _ui.value = _ui.value.copy(
+                uploading = false,
+                uploadProgress = null,
+                error = if (failed > 0) "上传完成：成功 $success 个，失败 $failed 个" else null,
+            )
+        }
+    }
+
     data class KnowledgeUiState(
         val loading: Boolean = false,
         val error: String? = null,
         val lastSuggestions: List<OrganizeSuggestion> = emptyList(),
+        val uploading: Boolean = false,
+        val uploadProgress: String? = null,
     )
 
     data class OrganizeSuggestion(

@@ -3,29 +3,37 @@ package com.learnspark.features.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.learnspark.core.network.ServerConfig
 import com.learnspark.data.migration.MigrationState
 import com.learnspark.data.migration.MigrationViewModel
 import com.learnspark.features.notification.NotificationCenterScreen
 import com.learnspark.features.notification.ReminderScreen
+import com.russhwolf.settings.Settings
 import org.koin.compose.koinInject
 
 /**
@@ -75,6 +83,11 @@ object SettingsScreen : Screen {
                     }
                 }
             }
+
+            Divider()
+
+            // R8：服务器地址配置（局域网同步）
+            ServerAddressCard()
 
             Divider()
 
@@ -153,3 +166,96 @@ object SettingsScreen : Screen {
         }
     }
 }
+
+/**
+ * R8：服务器地址配置卡片。
+ *
+ * - Desktop：显示本机局域网 IP，手机端在设置中填入此 IP 即可同步
+ * - Android：输入框让用户填写 PC 的局域网 IP
+ * - 将来部署到云服务器时，改为云端地址即可
+ */
+@Composable
+private fun ServerAddressCard() {
+    val settings: Settings = koinInject()
+    val platform = com.learnspark.currentPlatform()
+    val isDesktop = platform.startsWith("Desktop")
+    val defaultHost = if (isDesktop) "localhost" else "10.0.2.2"
+    val currentHost = remember { ServerConfig.getHost(settings, defaultHost) }
+    val currentPort = remember { ServerConfig.getPort(settings) }
+    var host by remember { mutableStateOf(currentHost) }
+    var port by remember { mutableStateOf(currentPort) }
+    var saved by remember { mutableStateOf(false) }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("数据同步", style = MaterialTheme.typography.subtitle1)
+            Text(
+                if (isDesktop) {
+                    "PC 端作为同步服务器。手机和电脑连同一 WiFi，在手机端设置中填入下方显示的 IP 地址即可同步。\n" +
+                        "将来部署到云服务器时，把地址改为云端域名即可。"
+                } else {
+                    "填写电脑端显示的局域网 IP 地址（手机和电脑需连同一 WiFi）。\n" +
+                        "将来部署到云服务器时，把地址改为云端域名即可。"
+                },
+                style = MaterialTheme.typography.caption,
+            )
+
+            if (isDesktop) {
+                val localIp = remember { getLocalIpAddress() }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = MaterialTheme.colors.primary.copy(alpha = 0.08f),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("本机局域网 IP", style = MaterialTheme.typography.caption)
+                        Text(localIp, style = MaterialTheme.typography.h6)
+                        Text(
+                            "在手机端设置 → 数据同步 中填入此地址",
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = host,
+                onValueChange = { host = it; saved = false },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("服务器地址") },
+                placeholder = { Text(if (isDesktop) "localhost" else "192.168.1.100") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = port,
+                onValueChange = { port = it.filter { c -> c.isDigit() }.take(5); saved = false },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("端口") },
+                singleLine = true,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        ServerConfig.setServerAddress(settings, host, port)
+                        saved = true
+                    },
+                ) { Text("保存") }
+                if (saved) {
+                    Text(
+                        "✓ 已保存，重启应用后生效",
+                        style = MaterialTheme.typography.caption,
+                        color = MaterialTheme.colors.primary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 获取本机局域网 IP 地址（Desktop 用于显示给用户）。
+ */
+expect fun getLocalIpAddress(): String

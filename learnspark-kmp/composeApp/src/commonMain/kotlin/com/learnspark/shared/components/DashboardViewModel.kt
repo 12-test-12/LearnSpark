@@ -84,6 +84,7 @@ class DashboardViewModel(
                     streakDays = streak.currentDays,
                     totalPoints = account.total,
                     dailyQuote = pickQuote(),
+                    checkedInToday = streak.lastCheckInDate == java.time.LocalDate.now().toString(),
                 )
             }
         }
@@ -91,6 +92,28 @@ class DashboardViewModel(
 
     fun refreshQuote() {
         _state.update { it.copy(dailyQuote = pickQuote()) }
+    }
+
+    /**
+     * 每日打卡：调用 GamificationService 累加连续天数 + 积分。
+     * 同一天重复调用不会叠加（由 GamificationService 内部保证）。
+     */
+    fun checkIn() {
+        val today = java.time.LocalDate.now().toString()
+        val streak = gamification.currentStreak()
+        if (streak.lastCheckInDate == today) {
+            _state.update { it.copy(checkedInToday = true) }
+            return
+        }
+        val reward = gamification.processEvent("check_in", com.learnspark.features.gamification.GamificationContext())
+        val account = gamification.account()
+        _state.update {
+            it.copy(
+                streakDays = reward.currentStreak.currentDays,
+                totalPoints = account.total,
+                checkedInToday = true,
+            )
+        }
     }
 
     private fun pickQuote(): DailyQuote {
@@ -117,6 +140,7 @@ data class DashboardState(
     val totalPoints: Int = 0,
     val knowledgeEntryCount: Int = 0,
     val todayTasks: List<TodayTask> = emptyList(),
+    val checkedInToday: Boolean = false,
 )
 
 @Immutable
