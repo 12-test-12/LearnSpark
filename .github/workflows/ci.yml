@@ -233,12 +233,15 @@ jobs:
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0-linux.tar.gz
           if-no-files-found: error
 
-  # ---------- Release：push master 时发布到 latest release，push tag v* 时发布对应 tag ----------
+  # ---------- Release：只要构建成功就发到 GitHub Releases ----------
+  # 触发条件：push 到 master / push tag v* / workflow_dispatch
+  # tag 推送：用 tag 名作为 release 名称（正式版）
+  # master / 手动触发：用 latest 作为 tag（覆盖式更新）
   release:
     name: Create GitHub Release
     needs: [build-windows, build-android, build-linux]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     steps:
@@ -254,15 +257,26 @@ jobs:
         id: meta
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # push tag：用 tag 名，标记为正式版
             echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "release_name=LearnSpark ${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "override=false" >> "$GITHUB_OUTPUT"
           else
-            # push master：使用固定 latest tag，每次自动覆盖同名 release
+            # push master / 手动触发：固定 latest tag，每次自动覆盖同名 release
             echo "tag_name=latest" >> "$GITHUB_OUTPUT"
-            echo "release_name=LearnSpark latest (master)" >> "$GITHUB_OUTPUT"
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "release_name=LearnSpark latest (build ${{ github.run_number }})" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "override=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Delete existing latest release
+        if: steps.meta.outputs.override == 'true'
+        continue-on-error: true
+        run: |
+          # 删除已存在的 latest tag + release，便于 softprops 重建
+          git tag -d latest 2>/dev/null || true
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -272,9 +286,9 @@ jobs:
           body: |
             ## ${{ steps.meta.outputs.release_name }}
 
-            构建自 commit `${{ github.sha }}`。
+            构建自 commit `${{ github.sha }}`（${{ github.event_name }}，${{ github.ref }}）。
 
-            包含四个产物：
+            包含产物：
 
             ### Desktop
             - **LearnSpark-1.0.0.exe** — Windows 桌面客户端（双击即用，无需安装）
