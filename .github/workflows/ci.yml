@@ -18,6 +18,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
@@ -47,21 +52,27 @@ jobs:
       - name: Locate EXE artifact
         shell: bash
         run: |
+          echo "=== EXE ==="
           find learnspark-kmp/composeApp/build/compose/binaries/main -name "*.exe" -type f
-          ls -la learnspark-kmp/composeApp/build/compose/binaries/main/exe/ 2>/dev/null || true
+          echo "=== EXE directory tree ==="
+          ls -laR learnspark-kmp/composeApp/build/compose/binaries/main/exe/ 2>/dev/null || true
 
-      - name: Rename EXE with arch
+      - name: Copy EXE to stable path
         shell: bash
         run: |
           cd learnspark-kmp/composeApp/build/compose/binaries/main
-          EXE_FILE=$(find . -maxdepth 3 -name "LearnSpark*.exe" -type f | head -1)
+          EXE_FILE=$(find . -name "LearnSpark.exe" -type f | head -1)
           if [ -z "$EXE_FILE" ]; then
-            EXE_FILE=$(find . -maxdepth 3 -name "*.exe" -type f | head -1)
+            EXE_FILE=$(find . -name "*.exe" -type f | head -1)
           fi
           echo "Found EXE: $EXE_FILE"
           if [ -n "$EXE_FILE" ]; then
             cp "$EXE_FILE" "LearnSpark-1.0.0.exe"
             ls -la "LearnSpark-1.0.0.exe"
+          else
+            echo "ERROR: No EXE found, listing build dir:"
+            ls -laR learnspark-kmp/composeApp/build/compose/binaries/main/
+            exit 1
           fi
 
       - name: Upload Desktop EXE
@@ -112,6 +123,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:
@@ -134,13 +150,9 @@ jobs:
         working-directory: learnspark-kmp
         run: chmod +x gradlew
 
-      - name: Package Linux DEB
+      - name: Package Linux DEB + tar.gz
         working-directory: learnspark-kmp
-        run: ./gradlew :composeApp:packageDeb --no-daemon
-
-      - name: Package Linux tar.gz
-        working-directory: learnspark-kmp
-        run: ./gradlew :composeApp:package --no-daemon
+        run: ./gradlew :composeApp:packageDeb :composeApp:package --no-daemon
 
       - name: Locate Linux artifacts
         run: |
@@ -150,22 +162,27 @@ jobs:
           find learnspark-kmp/composeApp/build/compose/binaries/main -name "*.tar.gz" -type f
           ls -la learnspark-kmp/composeApp/build/compose/binaries/main/
 
-      - name: Copy Linux DEB with version
+      - name: Copy Linux DEB to stable name
         run: |
           cd learnspark-kmp/composeApp/build/compose/binaries/main
           DEB_FILE=$(find . -name "*.deb" -type f | head -1)
           if [ -n "$DEB_FILE" ]; then
             cp "$DEB_FILE" "LearnSpark-1.0.0.deb"
             ls -la "LearnSpark-1.0.0.deb"
+          else
+            echo "WARN: no DEB produced, listing build dir:"
+            ls -laR learnspark-kmp/composeApp/build/compose/binaries/main/
           fi
 
-      - name: Copy Linux tar.gz with version
+      - name: Copy Linux tar.gz to stable name
         run: |
           cd learnspark-kmp/composeApp/build/compose/binaries/main
           TGZ_FILE=$(find . -name "*.tar.gz" -type f | head -1)
           if [ -n "$TGZ_FILE" ]; then
             cp "$TGZ_FILE" "LearnSpark-1.0.0-linux.tar.gz"
             ls -la "LearnSpark-1.0.0-linux.tar.gz"
+          else
+            echo "WARN: no tar.gz produced"
           fi
 
       - name: Upload Linux DEB
