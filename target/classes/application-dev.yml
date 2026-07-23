@@ -1,0 +1,27 @@
+# =============================================================================
+# 开发环境配置（dev profile）
+# 由 application.yml 中 spring.profiles.active=dev 激活
+# =============================================================================
+
+spring:
+  # MySQL 数据源
+  datasource:
+    url: jdbc:mysql://localhost:3306/learnspark?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # 开发环境打印 SQL
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
