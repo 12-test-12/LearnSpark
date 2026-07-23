@@ -25,6 +25,14 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Clear Gradle dependency cache (workaround for upstream 502)
+        shell: bash
+        run: |
+          # 上次 502 失败会被 Gradle 缓存 24 小时，清掉才能重试
+          rm -rf ~/.gradle/caches/modules-2/metadata-* 2>/dev/null || true
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/com.android.tools.build/manifest-merger 2>/dev/null || true
+          echo "Cache cleared"
+
       - name: Grant execute permission for gradlew
         shell: bash
         working-directory: learnspark-kmp
@@ -110,6 +118,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
+
+      - name: Clear Gradle dependency cache (workaround for upstream 502)
+        run: |
+          rm -rf ~/.gradle/caches/modules-2/metadata-* 2>/dev/null || true
+          rm -rf ~/.gradle/caches/modules-2/files-2.1/com.android.tools.build/manifest-merger 2>/dev/null || true
+          echo "Cache cleared"
 
       - name: Install Linux packaging dependencies
         run: |
