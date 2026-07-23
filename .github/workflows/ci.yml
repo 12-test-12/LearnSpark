@@ -16,15 +16,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -76,7 +71,7 @@ jobs:
           fi
 
       - name: Upload Desktop EXE
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: learnspark-desktop-exe
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0.exe
@@ -107,7 +102,7 @@ jobs:
           fi
 
       - name: Upload Android APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: learnspark-android-apk
           path: learnspark-kmp/composeApp/build/outputs/apk/debug/LearnSpark-1.0.0.apk
@@ -121,15 +116,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -150,17 +140,17 @@ jobs:
         working-directory: learnspark-kmp
         run: chmod +x gradlew
 
-      - name: Package Linux DEB + tar.gz
+      # packageDeb 会触发 createDistributable，在 build/compose/binaries/main/app/<name>/ 生成可运行目录
+      - name: Package Linux DEB
         working-directory: learnspark-kmp
-        run: ./gradlew :composeApp:packageDeb :composeApp:package --no-daemon
+        run: ./gradlew :composeApp:packageDeb --no-daemon
 
       - name: Locate Linux artifacts
         run: |
           echo "=== DEB ==="
           find learnspark-kmp/composeApp/build/compose/binaries/main -name "*.deb" -type f
-          echo "=== TarGz ==="
-          find learnspark-kmp/composeApp/build/compose/binaries/main -name "*.tar.gz" -type f
-          ls -la learnspark-kmp/composeApp/build/compose/binaries/main/
+          echo "=== App distributable dir ==="
+          ls -la learnspark-kmp/composeApp/build/compose/binaries/main/app/ 2>/dev/null || true
 
       - name: Copy Linux DEB to stable name
         run: |
@@ -174,26 +164,30 @@ jobs:
             ls -laR learnspark-kmp/composeApp/build/compose/binaries/main/
           fi
 
-      - name: Copy Linux tar.gz to stable name
+      # Compose Multiplatform 没有内置的 tar.gz 任务，手动从 app 目录打包
+      - name: Create tar.gz from distributable
         run: |
           cd learnspark-kmp/composeApp/build/compose/binaries/main
-          TGZ_FILE=$(find . -name "*.tar.gz" -type f | head -1)
-          if [ -n "$TGZ_FILE" ]; then
-            cp "$TGZ_FILE" "LearnSpark-1.0.0-linux.tar.gz"
+          # createDistributable 会在 app/<package-name>/ 生成可运行目录
+          APP_DIR=$(find app -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -1)
+          if [ -n "$APP_DIR" ]; then
+            tar -czf "LearnSpark-1.0.0-linux.tar.gz" "$APP_DIR"
+            echo "Created tar.gz:"
             ls -la "LearnSpark-1.0.0-linux.tar.gz"
           else
-            echo "WARN: no tar.gz produced"
+            echo "WARN: no app directory found, listing build tree:"
+            ls -laR . | head -80
           fi
 
       - name: Upload Linux DEB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: learnspark-linux-deb
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0.deb
           if-no-files-found: warn
 
       - name: Upload Linux tar.gz
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: learnspark-linux-tar
           path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0-linux.tar.gz
@@ -209,7 +203,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: dist
 
