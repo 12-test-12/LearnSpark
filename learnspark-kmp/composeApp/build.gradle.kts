@@ -159,7 +159,7 @@ compose.desktop {
         mainClass = "com.learnspark.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Exe, TargetFormat.Dmg, TargetFormat.Deb)
             packageName = "LearnSpark"
             packageVersion = "1.0.0"
 

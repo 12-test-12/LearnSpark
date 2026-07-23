@@ -3,12 +3,14 @@ name: CI Build
 on:
   push:
     branches: [ master ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:        # 允许手动触发（即使 push 后也想再跑一次）
 
 jobs:
   build:
-    name: Build & Test
+    name: Build Desktop + Android
     runs-on: windows-latest
     timeout-minutes: 60
 
@@ -28,90 +30,73 @@ jobs:
         working-directory: learnspark-kmp
         run: chmod +x gradlew
 
-      - name: Show Gradle & Java version
+      # ---------- Desktop (EXE) ----------
+      - name: Package Desktop (EXE)
         shell: bash
         working-directory: learnspark-kmp
+        run: ./gradlew.bat :composeApp:packageExe --no-daemon
+
+      - name: Locate EXE artifact
+        shell: bash
         run: |
-          ./gradlew --version
-          java -version
+          find learnspark-kmp/composeApp/build/compose/binaries/main -name "*.exe" -type f
+          ls -la learnspark-kmp/composeApp/build/compose/binaries/main/exe/ 2>/dev/null || true
 
-      # ---------- 后端 ----------
-      - name: Build server (bootJar)
+      - name: Rename EXE with arch
         shell: bash
-        working-directory: learnspark-kmp
-        run: ./gradlew.bat :server:bootJar --no-daemon
+        run: |
+          cd learnspark-kmp/composeApp/build/compose/binaries/main
+          EXE_FILE=$(find . -maxdepth 3 -name "LearnSpark*.exe" -type f | head -1)
+          if [ -z "$EXE_FILE" ]; then
+            EXE_FILE=$(find . -maxdepth 3 -name "*.exe" -type f | head -1)
+          fi
+          echo "Found EXE: $EXE_FILE"
+          if [ -n "$EXE_FILE" ]; then
+            cp "$EXE_FILE" "LearnSpark-1.0.0.exe"
+            ls -la "LearnSpark-1.0.0.exe"
+          fi
 
-      - name: Run server tests
-        shell: bash
-        working-directory: learnspark-kmp
-        run: ./gradlew.bat :server:test --no-daemon
-        continue-on-error: true   # 现阶段没测试，避免阻塞
-
-      - name: Upload server JAR
+      - name: Upload Desktop EXE
         uses: actions/upload-artifact@v4
         with:
-          name: learnspark-server
-          path: learnspark-kmp/server/build/libs/*.jar
-          if-no-files-found: warn
+          name: learnspark-desktop-exe
+          path: learnspark-kmp/composeApp/build/compose/binaries/main/LearnSpark-1.0.0.exe
+          if-no-files-found: error
 
-      # ---------- Desktop ----------
-      - name: Compile Desktop
-        shell: bash
-        working-directory: learnspark-kmp
-        run: ./gradlew.bat :composeApp:compileKotlinDesktop --no-daemon
-
-      - name: Package MSI
-        shell: bash
-        working-directory: learnspark-kmp
-        run: ./gradlew.bat :composeApp:packageMsi --no-daemon
-
-      - name: Upload Desktop MSI
-        uses: actions/upload-artifact@v4
-        with:
-          name: learnspark-desktop-msi
-          path: learnspark-kmp/composeApp/build/compose/binaries/main/msi/**/*.msi
-          if-no-files-found: warn
-
-      # ---------- Android ----------
+      # ---------- Android (APK) ----------
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Compile Android (Debug)
-        shell: bash
-        working-directory: learnspark-kmp
-        run: ./gradlew.bat :composeApp:compileDebugKotlinAndroid --no-daemon
 
       - name: Assemble Debug APK
         shell: bash
         working-directory: learnspark-kmp
         run: ./gradlew.bat :composeApp:assembleDebug --no-daemon
 
+      - name: Locate APK
+        shell: bash
+        run: |
+          find learnspark-kmp/composeApp/build/outputs/apk/debug -name "*.apk" -type f
+
+      - name: Copy APK with version
+        shell: bash
+        run: |
+          cd learnspark-kmp/composeApp/build/outputs/apk/debug
+          APK_FILE=$(find . -name "*.apk" -type f | head -1)
+          if [ -n "$APK_FILE" ]; then
+            cp "$APK_FILE" "LearnSpark-1.0.0.apk"
+            ls -la "LearnSpark-1.0.0.apk"
+          fi
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: learnspark-android-debug
-          path: learnspark-kmp/composeApp/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          name: learnspark-android-apk
+          path: learnspark-kmp/composeApp/build/outputs/apk/debug/LearnSpark-1.0.0.apk
+          if-no-files-found: error
 
-  # ---------- 仅 master 分支跑：上传构建产物 ----------
-  upload:
-    name: Upload Artifacts (master only)
-    needs: build
-    runs-on: windows-latest
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: List artifacts
-        shell: bash
-        run: find dist -type f | head -50
-
-  # ---------- 打 tag 时发 Release ----------
+  # ---------- Release：仅在 push tag 时触发，自动发布到 GitHub Releases ----------
   release:
-    name: Release
+    name: Create GitHub Release
     needs: build
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v')
@@ -123,13 +108,27 @@ jobs:
         with:
           path: dist
 
+      - name: List downloaded artifacts
+        shell: bash
+        run: find dist -type f
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: LearnSpark ${{ github.ref_name }}
+          body: |
+            ## LearnSpark ${{ github.ref_name }}
+
+            包含两个产物：
+            - **LearnSpark-1.0.0.exe** — Windows 桌面客户端（双击即用，无需安装）
+            - **LearnSpark-1.0.0.apk** — Android 客户端（传手机安装）
+
+            使用方法：先在 PC 端启动服务（`learnspark-server` 来自前一个 release），
+            然后双击 EXE 启动桌面客户端，手机扫码或手动配 Server 地址。
           files: |
-            dist/learnspark-server/*.jar
-            dist/learnspark-desktop-msi/*.msi
-            dist/learnspark-android-debug/*.apk
+            dist/learnspark-desktop-exe/LearnSpark-1.0.0.exe
+            dist/learnspark-android-apk/LearnSpark-1.0.0.apk
           generate_release_notes: true
           draft: false
           prerelease: false
