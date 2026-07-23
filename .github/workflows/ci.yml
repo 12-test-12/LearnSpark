@@ -7,6 +7,15 @@ on:
   pull_request:
     branches: [ master ]
   workflow_dispatch:        # 允许手动触发（即使 push 后也想再跑一次）
+  # R8 修复：加 schedule 兜底，每天 02:00 (UTC) 自动跑一次，
+  # 防止 push 事件被 GitHub 去抖/漏触发时，CI 长期不跑。
+  schedule:
+    - cron: '0 2 * * *'
+
+# 同一分支同时只允许一个运行（避免 push 频率高时排队/取消）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # ---------- Job 1: Windows EXE ----------
